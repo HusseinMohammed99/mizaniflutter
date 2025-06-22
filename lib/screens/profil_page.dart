@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:image_picker/image_picker.dart';
 import 'dart:io';
-// 🔴 تم تغيير الاستيراد هنا
 import 'package:flutter_image_compress/flutter_image_compress.dart'; // لضغط الصور
 
 // الوصول إلى عميل Supabase المهيأ عالمياً
@@ -53,7 +52,6 @@ class _PersonalInformationPageState extends State<PersonalInformationPage> {
             content: Text('الرجاء تسجيل الدخول لعرض ملفك الشخصي.'),
           ),
         );
-        // لا تغير _isLoading هنا، اتركه false لأن لا يوجد تحميل فعلي
       }
       return;
     }
@@ -128,7 +126,6 @@ class _PersonalInformationPageState extends State<PersonalInformationPage> {
       final updates = {
         'username': _usernameController.text.trim(),
         'full_name': _fullNameController.text.trim(),
-        // 'avatar_url': _avatarUrl, // لا نحدث هذا هنا، يتم تحديثه في _pickAndUploadImage
         'updated_at': DateTime.now().toIso8601String(), // تحديث وقت التعديل
       };
 
@@ -139,7 +136,6 @@ class _PersonalInformationPageState extends State<PersonalInformationPage> {
           .eq('id', _currentUser!.id);
 
       // تحديث اسم المستخدم في Auth metadata إذا تغير
-      // 🔴 التأكد من أن currentUser.userMetadata ليس null قبل الوصول
       if (_usernameController.text.trim() !=
           (_currentUser!.userMetadata?['username'] ?? '')) {
         await supabase.auth.updateUser(
@@ -214,7 +210,7 @@ class _PersonalInformationPageState extends State<PersonalInformationPage> {
               quality: 70, // جودة الضغط (0-100)
               minWidth: 800, // يمكن تغيير الأبعاد لتقليل الحجم
               minHeight: 800,
-              format: CompressFormat.jpeg, // 🔴 تحديد صيغة الضغط
+              format: CompressFormat.jpeg, // تحديد صيغة الضغط
             );
 
         if (compressedFile == null) {
@@ -299,124 +295,277 @@ class _PersonalInformationPageState extends State<PersonalInformationPage> {
   Widget build(BuildContext context) {
     final screenWidth = MediaQuery.of(context).size.width;
     final cardWidth = screenWidth > 600 ? 500.0 : screenWidth * 0.9;
-    final textFieldWidth = cardWidth * 0.85;
+    // يتم حساب textFieldWidth بناءً على cardWidth لضمان الاستجابة
+    final textFieldWidth = cardWidth * 0.9;
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('المعلومات الشخصية'),
-        backgroundColor: Colors.transparent,
-        elevation: 0,
+        title: const Text(
+          'ملفي الشخصي', // تغيير العنوان ليكون أكثر وضوحاً
+          style: TextStyle(
+            fontWeight: FontWeight.bold,
+            fontSize: 24,
+            color: Colors.blueGrey, // لون أنيق للعنوان
+          ),
+        ),
+        backgroundColor: Colors.transparent, // لجعل الخلفية شفافة
+        elevation: 0, // إزالة الظل من شريط التطبيق
         centerTitle: true,
+        // يمكنك إضافة زر رجوع مخصص إذا لزم الأمر
+        // leading: IconButton(
+        //   icon: const Icon(Icons.arrow_back_ios, color: Colors.blueGrey),
+        //   onPressed: () => Navigator.of(context).pop(),
+        // ),
       ),
       body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
+          ? const Center(
+              child: CircularProgressIndicator(color: Colors.blueAccent),
+            ) // مؤشر تحميل بلون جذاب
           : SingleChildScrollView(
-              padding: const EdgeInsets.all(20.0),
+              padding: const EdgeInsets.symmetric(
+                horizontal: 20.0,
+                vertical: 10.0,
+              ), // تباعد أفضل
               child: Center(
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
+                    // 🔴 بطاقة الملف الشخصي المصممة باحترافية
                     Card(
-                      elevation: 10,
+                      elevation: 12, // ظل أكبر لإبراز البطاقة
                       shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(20),
+                        borderRadius: BorderRadius.circular(
+                          25,
+                        ), // حواف دائرية أكبر
                       ),
+                      margin: const EdgeInsets.symmetric(
+                        vertical: 20,
+                      ), // تباعد عن الحواف
                       child: Padding(
-                        padding: const EdgeInsets.all(30.0),
+                        padding: const EdgeInsets.all(35.0), // تباعد داخلي أكبر
                         child: Column(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            // 🔴 الصورة الشخصية
-                            GestureDetector(
-                              onTap: _pickAndUploadImage,
-                              child: CircleAvatar(
-                                radius: 60,
-                                backgroundColor: Colors.grey[200],
-                                backgroundImage:
-                                    _avatarUrl != null && _avatarUrl!.isNotEmpty
-                                    ? NetworkImage(_avatarUrl!)
-                                    : null,
-                                child: _avatarUrl == null || _avatarUrl!.isEmpty
-                                    ? Icon(
+                            // 🔴 الصورة الشخصية مع تأثير جميل
+                            Stack(
+                              alignment: Alignment.center,
+                              children: [
+                                CircleAvatar(
+                                  radius: 70, // حجم أكبر للصورة
+                                  backgroundColor:
+                                      Colors.blueGrey.shade100, // خلفية خفيفة
+                                  backgroundImage:
+                                      _avatarUrl != null &&
+                                          _avatarUrl!.isNotEmpty
+                                      ? NetworkImage(_avatarUrl!)
+                                      : null,
+                                  child:
+                                      _avatarUrl == null || _avatarUrl!.isEmpty
+                                      ? Icon(
+                                          Icons
+                                              .person, // أيقونة شخص بدلاً من الكاميرا إذا لا توجد صورة
+                                          size: 70,
+                                          color: Colors.blueGrey.shade400,
+                                        )
+                                      : null,
+                                ),
+                                // زر الكاميرا للتغيير
+                                Positioned(
+                                  bottom: 0,
+                                  right: 0,
+                                  child: GestureDetector(
+                                    onTap: _pickAndUploadImage,
+                                    child: CircleAvatar(
+                                      radius: 22, // حجم صغير لزر الكاميرا
+                                      backgroundColor: Theme.of(context)
+                                          .colorScheme
+                                          .primary, // لون أساسي من الثيم
+                                      child: const Icon(
                                         Icons.camera_alt,
-                                        size: 40,
-                                        color: Colors.grey[700],
-                                      )
-                                    : null,
-                              ),
+                                        color: Colors.white,
+                                        size: 18,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ],
                             ),
-                            const SizedBox(height: 30),
-
-                            // 🔴 حقل اسم المستخدم
+                            const SizedBox(height: 35), // تباعد بعد الصورة
+                            // 🔴 حقل اسم المستخدم بتصميم محسّن
                             SizedBox(
                               width: textFieldWidth,
                               child: TextField(
                                 controller: _usernameController,
-                                decoration: const InputDecoration(
+                                decoration: InputDecoration(
                                   labelText: 'اسم المستخدم',
                                   hintText: 'ادخل اسم المستخدم',
-                                  border: OutlineInputBorder(),
-                                  prefixIcon: Icon(Icons.person),
+                                  prefixIcon: const Icon(
+                                    Icons.person_outline,
+                                    color: Colors.blueGrey,
+                                  ),
+                                  border: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(
+                                      12,
+                                    ), // حواف دائرية
+                                    borderSide: BorderSide
+                                        .none, // إزالة الحدود الافتراضية
+                                  ),
+                                  filled: true, // خلفية مملوءة
+                                  fillColor:
+                                      Theme.of(
+                                        context,
+                                      ).inputDecorationTheme.fillColor ??
+                                      Colors.grey.shade100, // لون خلفية الحقل
+                                  contentPadding: const EdgeInsets.symmetric(
+                                    vertical: 16,
+                                    horizontal: 12,
+                                  ), // تباعد داخلي
+                                  enabledBorder: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                    borderSide: BorderSide(
+                                      color: Colors.grey.shade300,
+                                      width: 1,
+                                    ), // حدود خفيفة
+                                  ),
+                                  focusedBorder: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                    borderSide: const BorderSide(
+                                      color: Colors.blueAccent,
+                                      width: 2,
+                                    ), // حدود عند التركيز
+                                  ),
                                 ),
+                                style: const TextStyle(
+                                  fontSize: 16,
+                                ), // حجم خط مناسب
                               ),
                             ),
-                            const SizedBox(height: 20),
-
-                            // 🔴 حقل الاسم الكامل
+                            const SizedBox(height: 25), // تباعد
+                            // 🔴 حقل الاسم الكامل بتصميم محسّن
                             SizedBox(
                               width: textFieldWidth,
                               child: TextField(
                                 controller: _fullNameController,
-                                decoration: const InputDecoration(
+                                decoration: InputDecoration(
                                   labelText: 'الاسم الكامل',
                                   hintText: 'ادخل اسمك الكامل',
-                                  border: OutlineInputBorder(),
-                                  prefixIcon: Icon(Icons.badge),
+                                  prefixIcon: const Icon(
+                                    Icons.badge_outlined,
+                                    color: Colors.blueGrey,
+                                  ),
+                                  border: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                    borderSide: BorderSide.none,
+                                  ),
+                                  filled: true,
+                                  fillColor:
+                                      Theme.of(
+                                        context,
+                                      ).inputDecorationTheme.fillColor ??
+                                      Colors.grey.shade100,
+                                  contentPadding: const EdgeInsets.symmetric(
+                                    vertical: 16,
+                                    horizontal: 12,
+                                  ),
+                                  enabledBorder: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                    borderSide: BorderSide(
+                                      color: Colors.grey.shade300,
+                                      width: 1,
+                                    ),
+                                  ),
+                                  focusedBorder: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                    borderSide: const BorderSide(
+                                      color: Colors.blueAccent,
+                                      width: 2,
+                                    ),
+                                  ),
                                 ),
+                                style: const TextStyle(fontSize: 16),
                               ),
                             ),
-                            const SizedBox(height: 20),
+                            const SizedBox(height: 25),
 
-                            // 🔴 حقل البريد الإلكتروني (للعرض فقط لأنه يأتي من المصادقة)
+                            // 🔴 حقل البريد الإلكتروني (للعرض فقط) بتصميم محسّن
                             SizedBox(
                               width: textFieldWidth,
                               child: TextField(
                                 controller: _emailController,
-                                decoration: const InputDecoration(
+                                decoration: InputDecoration(
                                   labelText: 'البريد الإلكتروني',
-                                  border: OutlineInputBorder(),
-                                  prefixIcon: Icon(Icons.email),
+                                  prefixIcon: const Icon(
+                                    Icons.email_outlined,
+                                    color: Colors.blueGrey,
+                                  ),
+                                  border: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                    borderSide: BorderSide.none,
+                                  ),
+                                  filled: true,
+                                  fillColor:
+                                      Theme.of(
+                                        context,
+                                      ).inputDecorationTheme.fillColor ??
+                                      Colors.grey.shade100,
+                                  contentPadding: const EdgeInsets.symmetric(
+                                    vertical: 16,
+                                    horizontal: 12,
+                                  ),
+                                  enabledBorder: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                    borderSide: BorderSide(
+                                      color: Colors.grey.shade300,
+                                      width: 1,
+                                    ),
+                                  ),
+                                  focusedBorder: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                    borderSide: const BorderSide(
+                                      color: Colors.blueAccent,
+                                      width: 2,
+                                    ),
+                                  ),
                                 ),
                                 readOnly: true, // لا يمكن تعديله من هنا
                                 keyboardType: TextInputType.emailAddress,
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  color: Theme.of(context)
+                                      .textTheme
+                                      .bodyLarge
+                                      ?.color
+                                      ?.withOpacity(0.7), // لون فاتح
+                                ),
                               ),
                             ),
-                            const SizedBox(height: 30),
-
-                            // 🔴 زر حفظ التغييرات
+                            const SizedBox(height: 35), // تباعد قبل الزر
+                            // 🔴 زر حفظ التغييرات بتصميم عصري
                             SizedBox(
                               width: textFieldWidth,
                               child: ElevatedButton(
                                 onPressed: _updateProfile,
                                 style: ElevatedButton.styleFrom(
-                                  backgroundColor: Colors.blue.shade700,
+                                  backgroundColor: Theme.of(
+                                    context,
+                                  ).colorScheme.primary, // لون أساسي من الثيم
                                   foregroundColor: Colors.white,
                                   padding: const EdgeInsets.symmetric(
-                                    vertical: 14,
-                                  ),
+                                    vertical: 16,
+                                  ), // تباعد أكبر للزر
                                   shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(12),
+                                    borderRadius: BorderRadius.circular(
+                                      15,
+                                    ), // حواف دائرية أكثر
                                   ),
-                                  elevation: 5,
-                                ),
-                                child: const Text(
-                                  "حفظ التغييرات",
-                                  style: TextStyle(
+                                  elevation: 8, // ظل أكبر للزر
+                                  textStyle: const TextStyle(
                                     fontSize: 18,
                                     fontWeight: FontWeight.bold,
                                   ),
                                 ),
+                                child: const Text("حفظ التغييرات"),
                               ),
                             ),
                           ],

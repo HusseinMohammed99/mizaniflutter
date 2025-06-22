@@ -3,12 +3,11 @@
 import 'package:flutter/material.dart';
 import 'package:mizaniflutter/compount/card_widget.dart';
 import 'package:mizaniflutter/compount/view_page.dart';
-// import 'package:mizaniflutter/main.dart'; // 🔴 لم نعد بحاجة لهذا الاستيراد هنا
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:intl/intl.dart';
 
 final formatter = NumberFormat("#,##0.00", "ar");
-TextEditingController t = TextEditingController();
+TextEditingController t = TextEditingController(); // يستخدم لعرض رسالة التحذير
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -27,102 +26,215 @@ class _HomePageState extends State<HomePage> {
   double debts = 0;
   double credits = 0;
 
+  String? _currentUserId; // 🔴 لتخزين معرف المستخدم الحالي
+
   @override
   void initState() {
     super.initState();
-    fetchTotals();
+    _currentUserId =
+        supabase.auth.currentUser?.id; // جلب معرف المستخدم عند تهيئة الـ Widget
+    if (_currentUserId == null) {
+      // إذا لم يكن هناك مستخدم مسجل دخول، اعرض رسالة
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('الرجاء تسجيل الدخول لعرض بياناتك المالية.'),
+            backgroundColor: Colors.orange,
+          ),
+        );
+      }
+      // يمكن تعيين القيم إلى صفر أو إظهار حالة فارغة
+      setState(() {
+        totalSalary = 0;
+        totalExpense = 0;
+        netSalary = 0;
+        saving = 0;
+        debts = 0;
+        credits = 0;
+      });
+    } else {
+      fetchTotals(); // تحميل البيانات فقط إذا كان هناك مستخدم
+    }
   }
 
+  // 🔴 دالة جلب الإجماليات التي تقوم بفلترة البيانات حسب user_id
   Future<void> fetchTotals() async {
+    if (_currentUserId == null) return; // لا تحمل بيانات إذا لا يوجد مستخدم
+
+    final String userId =
+        _currentUserId!; // معرف المستخدم يجب أن يكون موجوداً هنا
+
     try {
-      final salaries = await supabase.from('salaries').select('amount');
-      final expenses = await supabase.from('expenses').select('amount');
-      final savingData = await supabase.from('saving').select('amount');
-      final debtsData = await supabase.from('debts').select('amount');
-      final creditsData = await supabase.from('credits').select('amount');
+      // 🔴 فلترة جميع الاستعلامات حسب user_id
+      final salaries = await supabase
+          .from('salaries')
+          .select('amount')
+          .eq('user_id', userId);
+      final expenses = await supabase
+          .from('expenses')
+          .select('amount')
+          .eq('user_id', userId);
+      final savingData = await supabase
+          .from('saving')
+          .select('amount')
+          .eq('user_id', userId);
+      final debtsData = await supabase
+          .from('debts')
+          .select('amount')
+          .eq('user_id', userId);
+      final creditsData = await supabase
+          .from('credits')
+          .select('amount')
+          .eq('user_id', userId);
 
-      double totalSalary = 0;
-      double totalExpense = 0;
-      double totalSaving = 0;
-      double totalDebts = 0;
-      double totalCredits = 0;
+      double calculatedTotalSalary = 0;
+      double calculatedTotalExpense = 0;
+      double calculatedTotalSaving = 0;
+      double calculatedTotalDebts = 0;
+      double calculatedTotalCredits = 0;
 
+      // 🔴 استخدام for-in loop لتحويل القيم بأمان
       for (var item in salaries) {
         final amt = item['amount'];
         if (amt is num) {
-          totalSalary += amt.toDouble();
+          calculatedTotalSalary += amt.toDouble();
         } else if (amt is String) {
-          totalSalary += double.tryParse(amt) ?? 0;
+          calculatedTotalSalary += double.tryParse(amt) ?? 0;
         }
       }
 
       for (var item in expenses) {
         final amt = item['amount'];
         if (amt is num) {
-          totalExpense += amt.toDouble();
+          calculatedTotalExpense += amt.toDouble();
         } else if (amt is String) {
-          totalExpense += double.tryParse(amt) ?? 0;
+          calculatedTotalExpense += double.tryParse(amt) ?? 0;
         }
       }
 
       for (var item in savingData) {
         final amt = item['amount'];
         if (amt is num) {
-          totalSaving += amt.toDouble();
+          calculatedTotalSaving += amt.toDouble();
         } else if (amt is String) {
-          totalSaving += double.tryParse(amt) ?? 0;
+          calculatedTotalSaving += double.tryParse(amt) ?? 0;
         }
       }
 
       for (var item in debtsData) {
         final amt = item['amount'];
         if (amt is num) {
-          totalDebts += amt.toDouble();
+          calculatedTotalDebts += amt.toDouble();
         } else if (amt is String) {
-          totalDebts += double.tryParse(amt) ?? 0;
+          calculatedTotalDebts += double.tryParse(amt) ?? 0;
         }
       }
 
       for (var item in creditsData) {
         final amt = item['amount'];
         if (amt is num) {
-          totalCredits += amt.toDouble();
+          calculatedTotalCredits += amt.toDouble();
         } else if (amt is String) {
-          totalCredits += double.tryParse(amt) ?? 0;
+          calculatedTotalCredits += double.tryParse(amt) ?? 0;
         }
       }
+
       // Show warning if expenses exceed 70% of salary
-      if (totalSalary > 0 && totalExpense > totalSalary * 0.7) {
+      if (calculatedTotalSalary > 0 &&
+          calculatedTotalExpense > calculatedTotalSalary * 0.7) {
         if (mounted) {
           t.text = '⚠️ تحذير: المصروفات تجاوزت 70% من الراتب';
-          // Check if the widget is still in the tree
-          // ScaffoldMessenger.of(context).showSnackBar(
-          //   const SnackBar(
-          //     content: Text('⚠️ تحذير: المصروفات تجاوزت 70% من الراتب'),
-          //   ),
-          // );
+        }
+      } else {
+        if (mounted) {
+          t.text = ''; // مسح التحذير إذا لم يكن هناك تجاوز
         }
       }
-      final netSalary =
-          totalSalary - totalExpense - totalSaving - totalDebts - totalCredits;
 
-      setState(() {
-        this.totalSalary = totalSalary;
-        this.totalExpense = totalExpense;
-        saving = totalSaving;
-        debts = totalDebts;
-        credits = totalCredits;
-        this.netSalary = netSalary;
-      });
+      final calculatedNetSalary =
+          calculatedTotalSalary -
+          calculatedTotalExpense -
+          calculatedTotalSaving -
+          calculatedTotalDebts -
+          calculatedTotalCredits;
+
+      if (mounted) {
+        // 🔴 تحقق من mounted قبل setState
+        setState(() {
+          totalSalary = calculatedTotalSalary;
+          totalExpense = calculatedTotalExpense;
+          saving = calculatedTotalSaving;
+          debts = calculatedTotalDebts;
+          credits = calculatedTotalCredits;
+          netSalary = calculatedNetSalary;
+        });
+      }
+    } on PostgrestException catch (e) {
+      // 🔴 التعامل مع أخطاء Supabase
+      print('Error fetching totals from Supabase: ${e.message}');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('خطأ في جلب الإجماليات: ${e.message}'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+      // تعيين القيم إلى صفر في حالة الخطأ
+      if (mounted) {
+        setState(() {
+          totalSalary = 0;
+          totalExpense = 0;
+          netSalary = 0;
+          saving = 0;
+          debts = 0;
+          credits = 0;
+          t.text = 'خطأ في تحميل البيانات.';
+        });
+      }
     } catch (e) {
       print('Error fetching totals: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('حدث خطأ غير متوقع أثناء جلب الإجماليات: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+      // تعيين القيم إلى صفر في حالة الخطأ
+      if (mounted) {
+        setState(() {
+          totalSalary = 0;
+          totalExpense = 0;
+          netSalary = 0;
+          saving = 0;
+          debts = 0;
+          credits = 0;
+          t.text = 'خطأ في تحميل البيانات.';
+        });
+      }
     }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      bottomNavigationBar: BottomAppBar(height: 50, child: Text(t.text)),
+      bottomNavigationBar: BottomAppBar(
+        height: 50,
+        child: Center(
+          // 🔴 توسيط رسالة التحذير
+          child: Text(
+            t.text,
+            style: TextStyle(
+              color: t.text.startsWith('⚠️')
+                  ? Colors.orange
+                  : Colors.black, // لون التحذير
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+        ),
+      ),
       body: SafeArea(
         child: Column(
           children: [
@@ -161,8 +273,9 @@ class _HomePageState extends State<HomePage> {
             ),
             Expanded(
               child: ViewPageWidget(
-                filterTypes: ['الكل'],
-                onDataChanged: fetchTotals,
+                filterTypes: const ['الكل'], // 🔴 يمكن تغيير الفلتر هنا
+                onDataChanged:
+                    fetchTotals, // تحديث الإجماليات عند تغيير البيانات في ViewPageWidget
               ),
             ),
           ],

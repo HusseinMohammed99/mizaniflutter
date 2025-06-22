@@ -1,6 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:intl/intl.dart'; // لتنسيق الأرقام
+import 'dart:math'; // تم إضافة هذا الاستيراد لإصلاح خطأ 'max'
+
+// تنسيق الأرقام للغة العربية مع فاصل آلاف
+final NumberFormat currencyFormatter = NumberFormat("#,##0.00", "ar");
 
 // Represents a financial entry with amount and creation date.
 class FinancialEntry {
@@ -21,10 +26,16 @@ class FinancialEntry {
       parsedAmount = 0.0; // Default to 0.0 if type is unexpected
     }
 
-    return FinancialEntry(
-      amount: parsedAmount,
-      createdAt: DateTime.parse(data['created_at']),
-    );
+    // Safely parse the 'created_at' field.
+    DateTime parsedCreatedAt;
+    try {
+      parsedCreatedAt = DateTime.parse(data['created_at']);
+    } catch (e) {
+      print('Error parsing created_at: ${data['created_at']} - $e');
+      parsedCreatedAt = DateTime.now(); // Fallback to current time
+    }
+
+    return FinancialEntry(amount: parsedAmount, createdAt: parsedCreatedAt);
   }
 }
 
@@ -47,6 +58,7 @@ class _AnalysisPageState extends State<AnalysisPage> {
   double totalExpense = 0;
   double totalSaving = 0;
   double totalDebt = 0;
+  double totalCredit = 0; // 🔴 إضافة إجمالي الائتمان
 
   // Data points for salary and expense trends over time (for the LineChart).
   List<FlSpot> salarySpots = [];
@@ -54,12 +66,27 @@ class _AnalysisPageState extends State<AnalysisPage> {
 
   // Loading state indicator.
   bool isLoading = true;
+  String? _currentUserId; // 🔴 لتخزين معرف المستخدم الحالي
 
   @override
   void initState() {
     super.initState();
-    // Fetch data when the widget initializes.
-    fetchData();
+    _currentUserId = supabase.auth.currentUser?.id; // جلب معرف المستخدم
+    if (_currentUserId == null) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('الرجاء تسجيل الدخول لعرض التحليلات.'),
+            backgroundColor: Colors.orange,
+          ),
+        );
+      }
+      setState(() {
+        isLoading = false; // لا يوجد تحميل لبيانات، فقط عرض حالة فارغة
+      });
+    } else {
+      fetchData(); // Fetch data when the widget initializes.
+    }
   }
 
   // Determines the start date for data fetching based on the selected period.
@@ -123,49 +150,68 @@ class _AnalysisPageState extends State<AnalysisPage> {
 
   // Fetches financial data from Supabase for the selected period.
   Future<void> fetchData() async {
+    if (_currentUserId == null) return; // لا تجلب بيانات إذا لا يوجد مستخدم
+
     setState(() {
       isLoading = true; // Set loading state to true
     });
 
     final from = getStartDate();
     final to = getEndDate();
+    final String userId =
+        _currentUserId!; // معرف المستخدم يجب أن يكون موجوداً هنا
 
     try {
-      // Fetch salaries
+      // Fetch salaries, filtered by user_id
       final List<FinancialEntry> salaries =
           (await supabase
                   .from('salaries')
                   .select('amount, created_at')
+                  .eq('user_id', userId) // الفلترة هنا
                   .gte('created_at', from.toIso8601String())
                   .lte('created_at', to.toIso8601String()))
               .map((data) => FinancialEntry.fromMap(data))
               .toList();
 
-      // Fetch expenses
+      // Fetch expenses, filtered by user_id
       final List<FinancialEntry> expenses =
           (await supabase
                   .from('expenses')
                   .select('amount, created_at')
+                  .eq('user_id', userId) // الفلترة هنا
                   .gte('created_at', from.toIso8601String())
                   .lte('created_at', to.toIso8601String()))
               .map((data) => FinancialEntry.fromMap(data))
               .toList();
 
-      // Fetch savings
+      // Fetch savings, filtered by user_id
       final List<FinancialEntry> savings =
           (await supabase
                   .from('saving')
-                  .select('amount')
+                  .select('amount, created_at')
+                  .eq('user_id', userId) // الفلترة هنا
                   .gte('created_at', from.toIso8601String())
                   .lte('created_at', to.toIso8601String()))
               .map((data) => FinancialEntry.fromMap(data))
               .toList();
 
-      // Fetch debts
+      // Fetch debts, filtered by user_id
       final List<FinancialEntry> debts =
           (await supabase
                   .from('debts')
-                  .select('amount')
+                  .select('amount, created_at')
+                  .eq('user_id', userId) // الفلترة هنا
+                  .gte('created_at', from.toIso8601String())
+                  .lte('created_at', to.toIso8601String()))
+              .map((data) => FinancialEntry.fromMap(data))
+              .toList();
+
+      // Fetch credits, filtered by user_id
+      final List<FinancialEntry> credits =
+          (await supabase
+                  .from('credits')
+                  .select('amount, created_at')
+                  .eq('user_id', userId) // الفلترة هنا
                   .gte('created_at', from.toIso8601String())
                   .lte('created_at', to.toIso8601String()))
               .map((data) => FinancialEntry.fromMap(data))
@@ -176,6 +222,7 @@ class _AnalysisPageState extends State<AnalysisPage> {
       double sumExpense = expenses.fold(0, (sum, item) => sum + item.amount);
       double sumSaving = savings.fold(0, (sum, item) => sum + item.amount);
       double sumDebt = debts.fold(0, (sum, item) => sum + item.amount);
+      double sumCredit = credits.fold(0, (sum, item) => sum + item.amount);
 
       // Process data for line chart spots
       List<FlSpot> newSalarySpots = _processDataToSpots(
@@ -189,50 +236,137 @@ class _AnalysisPageState extends State<AnalysisPage> {
         selectedPeriod,
       );
 
-      setState(() {
-        totalSalary = sumSalary;
-        totalExpense = sumExpense;
-        totalSaving = sumSaving;
-        totalDebt = sumDebt;
-        salarySpots = newSalarySpots;
-        expenseSpots = newExpenseSpots;
-        isLoading = false; // Data fetched, stop loading
-      });
+      if (mounted) {
+        setState(() {
+          totalSalary = sumSalary;
+          totalExpense = sumExpense;
+          totalSaving = sumSaving;
+          totalDebt = sumDebt;
+          totalCredit = sumCredit;
+          salarySpots = newSalarySpots;
+          expenseSpots = newExpenseSpots;
+          isLoading = false; // Data fetched, stop loading
+        });
+      }
 
       // Show warning if expenses exceed 70% of salary
       if (totalSalary > 0 && totalExpense > totalSalary * 0.7) {
         if (mounted) {
-          // Check if the widget is still in the tree
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
               content: Text('⚠️ تحذير: المصروفات تجاوزت 70% من الراتب'),
+              backgroundColor: Colors.orange,
             ),
           );
         }
       }
-    } catch (e) {
-      // Handle any errors during data fetching.
+    } on PostgrestException catch (e) {
+      // Handle Supabase specific errors
       if (mounted) {
-        // Check if the widget is still in the tree
         setState(() {
           isLoading = false; // Stop loading on error
+          // Reset data on error
+          totalSalary = 0;
+          totalExpense = 0;
+          totalSaving = 0;
+          totalDebt = 0;
+          totalCredit = 0;
+          salarySpots = [];
+          expenseSpots = [];
         });
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('خطأ في جلب البيانات: $e')));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('خطأ في جلب البيانات: ${e.message}'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } catch (e) {
+      // Handle any other errors during data fetching.
+      if (mounted) {
+        setState(() {
+          isLoading = false; // Stop loading on error
+          // Reset data on error
+          totalSalary = 0;
+          totalExpense = 0;
+          totalSaving = 0;
+          totalDebt = 0;
+          totalCredit = 0;
+          salarySpots = [];
+          expenseSpots = [];
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('حدث خطأ غير متوقع أثناء جلب البيانات: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
       }
     }
   }
 
+  // Helper widget to display a summary card.
+  Widget _summaryCard(String title, double value, Color color) {
+    return Card(
+      elevation: 4, // Add subtle shadow
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+      ), // Rounded corners
+      color: color.withOpacity(0.1),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 12),
+        child: Column(
+          children: [
+            Text(
+              title,
+              style: TextStyle(
+                color: color,
+                fontWeight: FontWeight.bold,
+                fontSize: 16,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              currencyFormatter.format(value), // 🔴 استخدام currencyFormatter
+              style: TextStyle(
+                color: color,
+                fontSize: 18,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    // في حال عدم وجود مستخدم، اعرض رسالة مناسبة بدلاً من المخططات
+    if (_currentUserId == null) {
+      return Scaffold(
+        appBar: AppBar(title: const Text('تحليل البيانات المالية')),
+        body: const Center(
+          child: Padding(
+            padding: EdgeInsets.all(16.0),
+            child: Text(
+              'يرجى تسجيل الدخول لعرض تحليلاتك المالية.',
+              textAlign: TextAlign.center,
+              style: TextStyle(fontSize: 18, color: Colors.grey),
+            ),
+          ),
+        ),
+      );
+    }
+
     // Calculate saving percentage relative to total salary.
     double savingPercent = totalSalary > 0
         ? (totalSaving / totalSalary) * 100
         : 0;
 
-    // Calculate remaining funds after expenses and savings.
-    double remainingFunds = totalSalary - totalExpense - totalSaving;
+    // Calculate remaining funds after expenses and savings, debts, and credits.
+    double remainingFunds =
+        totalSalary - totalExpense - totalSaving - totalDebt + totalCredit;
 
     return Scaffold(
       appBar: AppBar(title: const Text('تحليل البيانات المالية')),
@@ -280,7 +414,7 @@ class _AnalysisPageState extends State<AnalysisPage> {
 
                   // Title for the Pie Chart
                   const Text(
-                    'توزيع الراتب',
+                    'توزيع الراتب والمصروفات',
                     style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
                   ),
                   const SizedBox(height: 10),
@@ -294,7 +428,7 @@ class _AnalysisPageState extends State<AnalysisPage> {
                         centerSpaceRadius: 40,
                         sections: [
                           // Expense slice
-                          if (totalExpense > 0)
+                          if (totalExpense > 0 && totalSalary > 0)
                             PieChartSectionData(
                               value: totalExpense,
                               title:
@@ -308,7 +442,7 @@ class _AnalysisPageState extends State<AnalysisPage> {
                               ),
                             ),
                           // Saving slice
-                          if (totalSaving > 0)
+                          if (totalSaving > 0 && totalSalary > 0)
                             PieChartSectionData(
                               value: totalSaving,
                               title:
@@ -322,7 +456,7 @@ class _AnalysisPageState extends State<AnalysisPage> {
                               ),
                             ),
                           // Remaining funds slice
-                          if (remainingFunds > 0)
+                          if (remainingFunds > 0 && totalSalary > 0)
                             PieChartSectionData(
                               value: remainingFunds,
                               title:
@@ -335,9 +469,12 @@ class _AnalysisPageState extends State<AnalysisPage> {
                                 color: Colors.white,
                               ),
                             ),
-                          // If totalSalary is 0 and there are expenses/savings, show a default section
+                          // If totalSalary is 0 and there are expenses/savings/debts/credits, show a default section
                           if (totalSalary == 0 &&
-                              (totalExpense > 0 || totalSaving > 0))
+                              (totalExpense > 0 ||
+                                  totalSaving > 0 ||
+                                  totalDebt > 0 ||
+                                  totalCredit > 0))
                             PieChartSectionData(
                               value: 1, // A small placeholder value
                               title: "لا يوجد راتب",
@@ -349,7 +486,25 @@ class _AnalysisPageState extends State<AnalysisPage> {
                                 color: Colors.white,
                               ),
                             ),
+                          // إذا كانت جميع القيم صفرية، اعرض "لا توجد بيانات" بشكل واضح
+                          if (totalSalary == 0 &&
+                              totalExpense == 0 &&
+                              totalSaving == 0 &&
+                              totalDebt == 0 &&
+                              totalCredit == 0)
+                            PieChartSectionData(
+                              value: 1,
+                              title: "لا توجد بيانات",
+                              color: Colors.grey.shade300,
+                              radius: 80,
+                              titleStyle: const TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.black54,
+                              ),
+                            ),
                         ],
+                        // 🔴 تم إزالة sectionsProvider
                       ),
                     ),
                   ),
@@ -368,9 +523,13 @@ class _AnalysisPageState extends State<AnalysisPage> {
                   const SizedBox(height: 20),
 
                   // Title for the Line Chart
-                  const Text(
-                    'تطور الراتب والمصروف',
-                    style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                  Text(
+                    'تطور الراتب والمصروف خلال ${selectedPeriod == 'شهر' ? 'الشهر الحالي' : 'السنة الحالية'}',
+                    style: const TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.bold,
+                    ),
+                    textAlign: TextAlign.center,
                   ),
                   const SizedBox(height: 10),
 
@@ -385,14 +544,19 @@ class _AnalysisPageState extends State<AnalysisPage> {
                           bottomTitles: AxisTitles(
                             sideTitles: SideTitles(
                               showTitles: true,
-                              interval: 1, // Show all day/month labels
+                              interval: selectedPeriod == 'شهر' ? 5 : 1,
                               getTitlesWidget: (value, meta) {
-                                // Format labels based on selected period.
                                 if (selectedPeriod == 'شهر') {
-                                  return Text("${value.toInt()}");
+                                  return SideTitleWidget(
+                                    axisSide: meta.axisSide,
+                                    child: Text(
+                                      value.toInt().toString(),
+                                      style: const TextStyle(fontSize: 10),
+                                    ),
+                                  );
                                 } else {
-                                  const months = [
-                                    '',
+                                  // 🔴 إزالة 'const' لأنها ليست ثابتة في وقت التصريف بسبب الوصول إلى index
+                                  final months = [
                                     'يناير',
                                     'فبراير',
                                     'مارس',
@@ -406,7 +570,13 @@ class _AnalysisPageState extends State<AnalysisPage> {
                                     'نوفمبر',
                                     'ديسمبر',
                                   ];
-                                  return Text(months[value.toInt()]);
+                                  return SideTitleWidget(
+                                    axisSide: meta.axisSide,
+                                    child: Text(
+                                      months[value.toInt() - 1],
+                                      style: const TextStyle(fontSize: 10),
+                                    ),
+                                  );
                                 }
                               },
                             ),
@@ -415,15 +585,15 @@ class _AnalysisPageState extends State<AnalysisPage> {
                           leftTitles: AxisTitles(
                             sideTitles: SideTitles(
                               showTitles: true,
-                              // Set interval to null to let FlChart determine optimal interval
-                              interval: null,
+                              interval:
+                                  null, // Let FlChart determine optimal interval
                               getTitlesWidget: (value, meta) {
                                 return Text(
-                                  value.toInt().toString(),
+                                  currencyFormatter.format(value),
                                   style: const TextStyle(fontSize: 10),
                                 );
                               },
-                              reservedSize: 40, // Reserve space for labels
+                              reservedSize: 60, // Reserve more space for labels
                             ),
                           ),
                           topTitles: const AxisTitles(
@@ -461,6 +631,27 @@ class _AnalysisPageState extends State<AnalysisPage> {
                             belowBarData: BarAreaData(show: false),
                           ),
                         ],
+                        // تحديد الـ min/max Y لقيم الراتب والمصروف
+                        minY: 0,
+                        // 🔴 استخدام dart:math.max بشكل صحيح
+                        maxY:
+                            max(
+                              salarySpots.isNotEmpty
+                                  ? salarySpots.map((e) => e.y).reduce(max)
+                                  : 0.0,
+                              expenseSpots.isNotEmpty
+                                  ? expenseSpots.map((e) => e.y).reduce(max)
+                                  : 0.0,
+                            ) *
+                            1.2, // 20% فوق أكبر قيمة
+                        minX: selectedPeriod == 'شهر' ? 1 : 1, // بداية المحور X
+                        maxX: selectedPeriod == 'شهر'
+                            ? DateTime(
+                                getStartDate().year,
+                                getStartDate().month + 1,
+                                0,
+                              ).day.toDouble()
+                            : 12, // نهاية المحور X
                       ),
                     ),
                   ),
@@ -487,66 +678,25 @@ class _AnalysisPageState extends State<AnalysisPage> {
                     runSpacing: 10, // Vertical spacing
                     alignment: WrapAlignment.center,
                     children: [
+                      _summaryCard('إجمالي الراتب', totalSalary, Colors.green),
+                      _summaryCard('إجمالي المصروف', totalExpense, Colors.red),
+                      _summaryCard('إجمالي الادخار', totalSaving, Colors.blue),
+                      _summaryCard('إجمالي الدين', totalDebt, Colors.orange),
                       _summaryCard(
-                        'صافي الراتب',
-                        totalSalary.toStringAsFixed(2),
-                        Colors.green,
+                        'إجمالي الائتمان',
+                        totalCredit,
+                        Colors.purple,
                       ),
                       _summaryCard(
-                        'المصروف',
-                        totalExpense.toStringAsFixed(2),
-                        Colors.red,
-                      ),
-                      _summaryCard(
-                        'الادخار',
-                        totalSaving.toStringAsFixed(2),
-                        Colors.blue,
-                      ),
-                      _summaryCard(
-                        'الدين',
-                        totalDebt.toStringAsFixed(2),
-                        Colors.orange,
+                        'صافي الرصيد',
+                        remainingFunds,
+                        remainingFunds >= 0 ? Colors.teal : Colors.deepOrange,
                       ),
                     ],
                   ),
                 ],
               ),
             ),
-    );
-  }
-
-  // Helper widget to display a summary card.
-  Widget _summaryCard(String title, String value, Color color) {
-    return Card(
-      elevation: 4, // Add subtle shadow
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-      ), // Rounded corners
-      color: color.withOpacity(0.1),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 12),
-        child: Column(
-          children: [
-            Text(
-              title,
-              style: TextStyle(
-                color: color,
-                fontWeight: FontWeight.bold,
-                fontSize: 16,
-              ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              value,
-              style: TextStyle(
-                color: color,
-                fontSize: 18,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ],
-        ),
-      ),
     );
   }
 }

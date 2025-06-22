@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:mizaniflutter/Theme/dark_theme_page.dart';
 import 'package:mizaniflutter/Theme/light_them_page.dart';
-// تأكد من استخدامه إذا كان ضرورياً
-import 'package:mizaniflutter/screens/login_page.dart';
-// تأكد من المسار الصحيح
+import 'package:mizaniflutter/auth_checker.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:shared_preferences/shared_preferences.dart'; // 🔴 استيراد shared_preferences
+import 'package:shared_preferences/shared_preferences.dart';
+
+// 🔴 استيراد الـ AuthChecker الذي سيتولى منطق التحقق من تسجيل الدخول
 
 // 🔴 إضافة ValueNotifier لإدارة حالة الثيم
 // يتم تهيئته لاحقًا بعد تحميل الإعدادات المحفوظة
@@ -19,6 +19,7 @@ const String _themeModeKey = 'themeMode';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
+  // تأكد من أن الـ URL والـ Anon Key صحيحان لمشروعك في Supabase
   await Supabase.initialize(
     url: 'https://uhxniafzyttpqpcxateo.supabase.co',
     anonKey:
@@ -72,12 +73,28 @@ class MyApp extends StatelessWidget {
         return MaterialApp(
           debugShowCheckedModeBanner: false,
           title: 'Mizani Flutter App',
-          theme: lightThemePage().lightTheme(), // الثيم الافتراضي للوضع الفاتح
-          darkTheme: DarkThemePage().darkTheme(), // الثيم للوضع الداكن
+          // 🔴 تحديد الثيم الفاتح وتضمين NavigationRailThemeData
+          theme: lightThemePage().lightTheme().copyWith(
+            navigationRailTheme: NavigationRailThemeData(
+              // لون التأشير (hover) للثيم الفاتح
+              selectedIconTheme: const IconThemeData(color: Color(0xFF2D6A4F)),
+              unselectedIconTheme: IconThemeData(color: Colors.grey[600]),
+            ),
+            // يمكنك إضافة المزيد من التخصيصات العالمية للثيم هنا
+          ),
+          // 🔴 تحديد الثيم الداكن وتضمين NavigationRailThemeData
+          darkTheme: DarkThemePage().darkTheme().copyWith(
+            navigationRailTheme: NavigationRailThemeData(
+              // لون التأشير (hover) للثيم الداكن
+              selectedIconTheme: const IconThemeData(color: Colors.white),
+              unselectedIconTheme: IconThemeData(color: Colors.grey[400]),
+            ),
+            // يمكنك إضافة المزيد من التخصيصات العالمية للثيم هنا
+          ),
           themeMode:
               currentThemeMode, // يستخدم الثيم الحالي من themeModeNotifier
-
-          home: LoginPage(), // HomeWidgest هو نقطة البداية لتطبيقك
+          // 🔴 استخدام AuthChecker كنقطة بداية للتطبيق
+          home: const AuthChecker(),
         );
       },
     );

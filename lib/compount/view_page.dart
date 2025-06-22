@@ -5,7 +5,7 @@ final supabase = Supabase.instance.client;
 
 class ViewPageWidget extends StatefulWidget {
   final List<String> filterTypes;
-  final VoidCallback? onDataChanged; // ⬅️ هذا الجديد
+  final VoidCallback? onDataChanged;
 
   const ViewPageWidget({
     super.key,
@@ -19,36 +19,114 @@ class ViewPageWidget extends StatefulWidget {
 
 class _ViewPageWidgetState extends State<ViewPageWidget> {
   List<Map<String, dynamic>>? transactions;
+  bool _isLoading = false; // لإدارة حالة التحميل
+  String? _currentUserId; // لتخزين معرف المستخدم الحالي
 
   @override
   void initState() {
     super.initState();
-    loadData();
+    _currentUserId =
+        supabase.auth.currentUser?.id; // جلب معرف المستخدم عند تهيئة الـ Widget
+    if (_currentUserId == null) {
+      // إذا لم يكن هناك مستخدم مسجل دخول، اعرض رسالة
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('الرجاء تسجيل الدخول لعرض بياناتك.'),
+            backgroundColor: Colors.orange,
+          ),
+        );
+      }
+      setState(() {
+        transactions = []; // لا توجد بيانات لعرضها
+      });
+    } else {
+      loadData(); // تحميل البيانات فقط إذا كان هناك مستخدم
+    }
   }
 
   Future<void> loadData() async {
+    if (_currentUserId == null) return; // لا تحمل بيانات إذا لا يوجد مستخدم
+
+    setState(() {
+      _isLoading = true; // تفعيل التحميل
+    });
+
     try {
       List<Map<String, dynamic>> allData = [];
       String table = '';
 
+      final String userId =
+          _currentUserId!; // معرف المستخدم يجب أن يكون موجوداً هنا
+
       if (widget.filterTypes.contains('الراتب')) {
         table = 'salaries';
+        final response = await supabase
+            .from(table)
+            .select()
+            .eq('user_id', userId); // 🔴 فلترة حسب user_id
+        allData = List<Map<String, dynamic>>.from(
+          response,
+        ).map((e) => {...e, 'table': table}).toList();
       } else if (widget.filterTypes.contains('المصروف')) {
         table = 'expenses';
+        final response = await supabase
+            .from(table)
+            .select()
+            .eq('user_id', userId); // 🔴 فلترة حسب user_id
+        allData = List<Map<String, dynamic>>.from(
+          response,
+        ).map((e) => {...e, 'table': table}).toList();
       } else if (widget.filterTypes.contains('الادخار')) {
         table = 'saving';
+        final response = await supabase
+            .from(table)
+            .select()
+            .eq('user_id', userId); // 🔴 فلترة حسب user_id
+        allData = List<Map<String, dynamic>>.from(
+          response,
+        ).map((e) => {...e, 'table': table}).toList();
       } else if (widget.filterTypes.contains('الدين')) {
         table = 'debts';
+        final response = await supabase
+            .from(table)
+            .select()
+            .eq('user_id', userId); // 🔴 فلترة حسب user_id
+        allData = List<Map<String, dynamic>>.from(
+          response,
+        ).map((e) => {...e, 'table': table}).toList();
       } else if (widget.filterTypes.contains('الدائن')) {
         table = 'credits';
+        final response = await supabase
+            .from(table)
+            .select()
+            .eq('user_id', userId); // 🔴 فلترة حسب user_id
+        allData = List<Map<String, dynamic>>.from(
+          response,
+        ).map((e) => {...e, 'table': table}).toList();
       } else if (widget.filterTypes.contains('الكل')) {
-        final salaries = await supabase.from('salaries').select();
-        final expenses = await supabase.from('expenses').select();
-        final saving = await supabase.from('saving').select();
-        final debts = await supabase.from('debts').select();
-        final credits = await supabase.from('credits').select();
+        // جلب جميع البيانات وفلترتها حسب user_id
+        final salaries = await supabase
+            .from('salaries')
+            .select()
+            .eq('user_id', userId);
+        final expenses = await supabase
+            .from('expenses')
+            .select()
+            .eq('user_id', userId);
+        final saving = await supabase
+            .from('saving')
+            .select()
+            .eq('user_id', userId);
+        final debts = await supabase
+            .from('debts')
+            .select()
+            .eq('user_id', userId);
+        final credits = await supabase
+            .from('credits')
+            .select()
+            .eq('user_id', userId);
 
-        // أضف مفتاح 'table' لكل عنصر لتحديد مصدره لاحقاً
         allData = [
           ...List<Map<String, dynamic>>.from(
             salaries,
@@ -66,46 +144,99 @@ class _ViewPageWidgetState extends State<ViewPageWidget> {
             credits,
           ).map((e) => {...e, 'table': 'credits'}),
         ];
+      }
 
+      if (mounted) {
         setState(() {
           transactions = allData;
         });
-        return;
       }
-
-      if (table.isNotEmpty) {
-        final response = await supabase.from(table).select();
-        allData = List<Map<String, dynamic>>.from(
-          response,
-        ).map((e) => {...e, 'table': table}).toList();
+    } on PostgrestException catch (e) {
+      print('Error loading data from Supabase: ${e.message}');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('خطأ في تحميل البيانات: ${e.message}'),
+            backgroundColor: Colors.red,
+          ),
+        );
+        setState(() {
+          transactions = [];
+        });
       }
-
-      setState(() {
-        transactions = allData;
-      });
     } catch (e) {
       print('Error loading data: $e');
-      setState(() {
-        transactions = [];
-      });
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('حدث خطأ غير متوقع أثناء التحميل: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+        setState(() {
+          transactions = [];
+        });
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
     }
   }
 
   Future<void> deleteItem(int id, String table) async {
-    try {
-      await supabase.from(table).delete().eq('id', id);
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('✅ تم الحذف بنجاح')));
+    if (_currentUserId == null) return; // لا تسمح بالحذف إذا لا يوجد مستخدم
 
-      await loadData(); // ⬅️ تحدث البيانات بعد الحذف
+    if (mounted) {
+      setState(() {
+        _isLoading = true; // تفعيل التحميل للحذف
+      });
+    }
+    try {
+      // 🔴 حذف السجل إذا كان الـ id متطابقاً وينتمي للمستخدم الحالي
+      await supabase
+          .from(table)
+          .delete()
+          .eq('id', id)
+          .eq('user_id', _currentUserId!);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('✅ تم الحذف بنجاح'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+      await loadData(); // تحدث البيانات بعد الحذف
+    } on PostgrestException catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('❌ خطأ أثناء الحذف: ${e.message}'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
     } catch (e) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('❌ خطأ أثناء الحذف: $e')));
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('❌ خطأ غير متوقع أثناء الحذف: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
     }
     if (widget.onDataChanged != null) {
-      widget.onDataChanged!(); // ⬅️ إشعار الصفحة الرئيسية بالتحديث
+      widget.onDataChanged!();
     }
   }
 
@@ -114,26 +245,62 @@ class _ViewPageWidgetState extends State<ViewPageWidget> {
     String table,
     Map<String, dynamic> newData,
   ) async {
-    try {
-      await supabase.from(table).update(newData).eq('id', id);
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('✅ تم التعديل بنجاح')));
+    if (_currentUserId == null) return; // لا تسمح بالتعديل إذا لا يوجد مستخدم
 
-      await loadData(); // ⬅️ تحدث البيانات بعد التعديل
+    if (mounted) {
+      setState(() {
+        _isLoading = true; // تفعيل التحميل للتعديل
+      });
+    }
+    try {
+      // 🔴 تحديث السجل إذا كان الـ id متطابقاً وينتمي للمستخدم الحالي
+      await supabase
+          .from(table)
+          .update(newData)
+          .eq('id', id)
+          .eq('user_id', _currentUserId!);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('✅ تم التعديل بنجاح'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+      await loadData(); // تحدث البيانات بعد التعديل
+    } on PostgrestException catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('❌ خطأ أثناء التعديل: ${e.message}'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
     } catch (e) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('❌ خطأ أثناء التعديل: $e')));
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('❌ خطأ غير متوقع أثناء التعديل: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
     }
     if (widget.onDataChanged != null) {
-      widget.onDataChanged!(); // ⬅️ إشعار الصفحة الرئيسية بالتحديث
+      widget.onDataChanged!();
     }
   }
 
   void showEditDialog(Map<String, dynamic> item, String table) {
-    final TextEditingController typeController = TextEditingController(
-      text: item['note'] ?? '', // 'note' or 'type'? Consistent naming is good.
+    final TextEditingController noteController = TextEditingController(
+      text: item['note'] ?? '', // 'note' هو الاسم المتوقع للعمود
     );
     final TextEditingController amountController = TextEditingController(
       text: item['amount'].toString(),
@@ -141,26 +308,27 @@ class _ViewPageWidgetState extends State<ViewPageWidget> {
 
     showDialog(
       context: context,
-      builder: (_) => AlertDialog(
+      builder: (BuildContext dialogContext) => AlertDialog(
+        // استخدام dialogContext منفصل
         title: const Text('تعديل البيانات'),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             TextField(
-              controller: typeController,
-              decoration: const InputDecoration(labelText: 'النوع'),
+              controller: noteController,
+              decoration: const InputDecoration(labelText: 'ملاحظة / نوع'),
             ),
             TextField(
               controller: amountController,
               decoration: const InputDecoration(labelText: 'المبلغ'),
-              keyboardType:
-                  TextInputType.number, // ⬅️ تأكد من نوع لوحة المفاتيح
+              keyboardType: TextInputType.number,
             ),
           ],
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context),
+            onPressed: () =>
+                Navigator.pop(dialogContext), // استخدام dialogContext
             child: const Text('إلغاء'),
           ),
           ElevatedButton(
@@ -168,29 +336,23 @@ class _ViewPageWidgetState extends State<ViewPageWidget> {
               final double? parsedAmount = double.tryParse(
                 amountController.text,
               );
-
-              // 🔴 هنا التعديل الرئيسي:
-              // إذا كان عمود 'amount' في قاعدة البيانات هو 'bigint'، يجب تحويله إلى int.
-              // إذا كان 'DOUBLE PRECISION' أو 'NUMERIC'، يمكن إرساله كـ double.
-              // الافتراض هنا أنك تريد إرساله كـ int ليتوافق مع 'bigint'.
               final dynamic amountToSend;
               if (parsedAmount != null) {
-                amountToSend = parsedAmount.toInt(); // تحويل إلى عدد صحيح
+                // 🔴 إذا كان عمود 'amount' في قاعدة البيانات هو 'bigint'، حوله إلى int.
+                // إذا كان 'DOUBLE PRECISION' أو 'NUMERIC'، يمكن إرساله كـ double.
+                // الافتراض هنا أنك تريد إرساله كـ int ليتوافق مع 'bigint'.
+                amountToSend = parsedAmount.toInt();
               } else {
-                amountToSend = 0; // قيمة افتراضية إذا لم يتمكن من التحويل
+                amountToSend = 0;
               }
 
               final newData = {
-                // تأكد من أن المفتاح هنا يطابق اسم العمود في قاعدة البيانات.
-                // في بعض الأحيان قد يكون 'type' أو 'note' أو غير ذلك.
-                // بناءً على كودك السابق، يبدو أنه 'note' في الـ ListTile، ولكن في newData هو 'type'.
-                // يرجى التحقق من اسم العمود الفعلي في قاعدة البيانات.
-                'note': typeController
-                    .text, // أو 'type': typeController.text، حسب اسم عمودك
+                'note': noteController
+                    .text, // استخدم 'note' أو 'type' حسب اسم العمود الفعلي
                 'amount': amountToSend,
               };
               editItem(item['id'], table, newData);
-              Navigator.pop(context);
+              Navigator.pop(dialogContext); // استخدام dialogContext
             },
             child: const Text('حفظ'),
           ),
@@ -203,13 +365,45 @@ class _ViewPageWidgetState extends State<ViewPageWidget> {
   Widget build(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.all(16),
-      child: transactions == null
+      child:
+          _isLoading // عرض مؤشر التحميل عندما تكون البيانات قيد التحميل
           ? const Center(child: CircularProgressIndicator())
-          : transactions!.isEmpty
-          ? const Center(
-              child: Text(
-                'لا توجد بيانات',
-                style: TextStyle(fontSize: 16, color: Colors.grey),
+          : transactions == null ||
+                transactions!
+                    .isEmpty // التحقق من عدم وجود بيانات
+          ? Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Text(
+                    'لا توجد بيانات لعرضها.',
+                    style: TextStyle(fontSize: 16, color: Colors.grey),
+                  ),
+                  if (_currentUserId !=
+                      null) // عرض معرف المستخدم فقط إذا كان موجوداً
+                    Padding(
+                      padding: const EdgeInsets.only(top: 20),
+                      child: Card(
+                        elevation: 4,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: Padding(
+                          padding: const EdgeInsets.all(12),
+                          child: SelectableText(
+                            // لجعل الـ ID قابلاً للنسخ
+                            'معرف المستخدم: \n${_currentUserId!}',
+                            textAlign: TextAlign.center,
+                            style: const TextStyle(
+                              fontSize: 14,
+                              color: Colors.blueGrey,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                ],
               ),
             )
           : SingleChildScrollView(
@@ -223,6 +417,20 @@ class _ViewPageWidgetState extends State<ViewPageWidget> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
+                      if (_currentUserId !=
+                          null) // عرض معرف المستخدم في أعلى البطاقة
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 12),
+                          // child: SelectableText(
+                          //   'معرف المستخدم: \n${_currentUserId!}',
+                          //   textAlign: TextAlign.start,
+                          //   style: const TextStyle(
+                          //     fontSize: 14,
+                          //     color: Colors.blueGrey,
+                          //     fontWeight: FontWeight.bold,
+                          //   ),
+                          // ),
+                        ),
                       const Text(
                         'البيانات',
                         style: TextStyle(
@@ -241,11 +449,8 @@ class _ViewPageWidgetState extends State<ViewPageWidget> {
 
                           return ListTile(
                             leading: const Icon(Icons.attach_money),
-                            title: Text(
-                              item['note'] ?? '',
-                            ), // قد يكون 'note' أو 'name' أو 'description'
+                            title: Text(item['note'] ?? ''),
                             subtitle: Text(
-                              // تأكد من أن مفاتيح البيانات هنا مطابقة للأسماء الفعلية في Supabase
                               '${item['type'] ?? ''} - ${item['amount'] ?? ''} د.ع',
                             ),
                             trailing: Row(
