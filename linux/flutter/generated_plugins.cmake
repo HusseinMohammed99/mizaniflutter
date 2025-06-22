@@ -3,7 +3,9 @@
 #
 
 list(APPEND FLUTTER_PLUGIN_LIST
+  file_selector_linux
   gtk
+  image_compression_flutter
   url_launcher_linux
 )
 

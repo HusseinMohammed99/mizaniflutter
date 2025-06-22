@@ -13,13 +13,15 @@ class DeposidPage extends StatefulWidget {
 
 TextEditingController mycontroller = TextEditingController();
 TextEditingController mytypecontroller = TextEditingController();
-
+final userId = Supabase.instance.client.auth.currentUser?.id;
+        
 class _DeposidPageState extends State<DeposidPage> {
   final supabase = Supabase.instance.client;
 
   Future<void> addExpense(String name) async {
     try {
       await supabase.from('salaries').insert({
+        'user_id': userId,
         'amount': name,
         'note': mytypecontroller.text,
         'type': 'إيداع',

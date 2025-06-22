@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:mizaniflutter/compount/view_page.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 class CreditsPage extends StatefulWidget {
   const CreditsPage({super.key});
@@ -10,11 +11,13 @@ class CreditsPage extends StatefulWidget {
 
 TextEditingController mycontroller = TextEditingController();
 TextEditingController mytypecontroller = TextEditingController();
+final userId = Supabase.instance.client.auth.currentUser?.id;
 
 class _CreditsPageState extends State<CreditsPage> {
   Future<void> addExpense(String name) async {
     try {
       final response = await supabase.from('credits').insert({
+        'user_id': userId,
         'amount': name,
         'note': mytypecontroller.text,
         'type': 'مدين',

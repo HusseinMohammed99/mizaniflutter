@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:mizaniflutter/screens/signup_page.dart';
+import 'package:mizaniflutter/screens/widgetpages/Home/home_widget.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 // تأكد من استيراد صفحتك الرئيسية (HomePage) هنا
-import 'package:mizaniflutter/screens/home_page.dart'; // 🔴 مثال: تأكد من المسار الصحيح لصفحتك الرئيسية
+// 🔴 مثال: تأكد من المسار الصحيح لصفحتك الرئيسية
 
 // الوصول إلى عميل Supabase المهيأ عالمياً
 final supabase = Supabase.instance.client;
@@ -62,7 +63,7 @@ class _LoginPageState extends State<LoginPage> {
             );
             Navigator.of(context).pushReplacement(
               MaterialPageRoute(
-                builder: (_) => const HomePage(),
+                builder: (_) => const HomeWidgest(),
               ), // 🔴 صفحتك الرئيسية
             );
           }

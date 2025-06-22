@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-// الوصول إلى عميل Supabase المهيأ عالمياً
+// الوصول إلى عميل Supabase
 final supabase = Supabase.instance.client;
 
 class SignupPage extends StatefulWidget {
@@ -12,15 +12,12 @@ class SignupPage extends StatefulWidget {
 }
 
 class _SignupPageState extends State<SignupPage> {
-  // متحكمات حقول الإدخال لاسم المستخدم، البريد الإلكتروني وكلمة المرور
   final TextEditingController _usernameController = TextEditingController();
   final TextEditingController _emailController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
 
-  // حالة التحميل لعرض مؤشر التحميل أثناء عملية التسجيل
   bool _isLoading = false;
 
-  // التأكد من التخلص من المتحكمات عند إغلاق الـ Widget لتجنب تسرب الذاكرة
   @override
   void dispose() {
     _usernameController.dispose();
@@ -29,86 +26,85 @@ class _SignupPageState extends State<SignupPage> {
     super.dispose();
   }
 
-  // 🔴 دالة التسجيل باستخدام Supabase
+  // ✅ صفحة رئيسية مؤقتة للانتقال إليها بعد النجاح
+  void _navigateToHome() {
+    Navigator.of(context).pushReplacement(
+      MaterialPageRoute(
+        builder: (_) => const Scaffold(
+          body: Center(child: Text('مرحباً بك في الصفحة الرئيسية')),
+        ),
+      ),
+    );
+  }
+
   Future<void> _signUp() async {
-    setState(() {
-      _isLoading = true; // تفعيل حالة التحميل
-    });
+    setState(() => _isLoading = true);
+
+    final username = _usernameController.text.trim();
+    final email = _emailController.text.trim();
+    final password = _passwordController.text.trim();
+
+    // ✅ التحقق من الحقول الفارغة
+    if (username.isEmpty || email.isEmpty || password.isEmpty) {
+      _showMessage('يرجى ملء جميع الحقول', Colors.orange);
+      setState(() => _isLoading = false);
+      return;
+    }
+
+    // ✅ التحقق من قوة كلمة المرور
+    if (password.length < 6) {
+      _showMessage('كلمة المرور يجب أن تكون 6 أحرف على الأقل', Colors.orange);
+      setState(() => _isLoading = false);
+      return;
+    }
+
     try {
       final AuthResponse res = await supabase.auth.signUp(
-        email: _emailController.text
-            .trim(), // استخدام trim لإزالة المسافات البيضاء
-        password: _passwordController.text.trim(),
-        data: {
-          'username': _usernameController.text
-              .trim(), // حفظ اسم المستخدم كبيانات وصفية (metadata)
-        },
+        email: email,
+        password: password,
+        data: {'username': username},
       );
 
-      // 🔴 التحقق مما إذا كان التسجيل ناجحاً والمستخدم قد تم إنشاؤه
       if (res.user != null) {
-        // إذا كان التسجيل يتطلب تأكيد البريد الإلكتروني (session تكون null)
         if (res.session == null) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text(
-                'تم التسجيل بنجاح! يرجى التحقق من بريدك الإلكتروني لتأكيد حسابك.',
-              ),
-              backgroundColor: Colors.green,
-            ),
+          _showMessage(
+            'تم التسجيل بنجاح! تحقق من بريدك الإلكتروني لتأكيد الحساب.',
+            Colors.green,
           );
-          // 🔴 لا تنتقل إلى صفحة أخرى، ابقِ المستخدم على صفحة التسجيل لينتظر التأكيد.
-          // يمكن هنا أيضاً إظهار زر لإعادة إرسال البريد الإلكتروني
         } else {
-          // هذه الحالة تحدث إذا كانت خاصية "Confirm new signups" معطلة في Supabase
-          // أو إذا تم التسجيل عبر مزود اجتماعي يقوم بالتأكيد التلقائي.
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('تم التسجيل بنجاح وتم تسجيل الدخول.')),
-          );
-          // إذا حدث هذا وتأكدت أن التأكيد غير مطلوب، يمكن الانتقال إلى الصفحة الرئيسية
-          // Navigator.of(context).pushReplacement(MaterialPageRoute(builder: (_) => const HomePage()));
+          _showMessage('تم التسجيل وتسجيل الدخول بنجاح!', Colors.green);
+          _navigateToHome(); // ✅ انتقال إلى الصفحة الرئيسية
         }
       }
     } on AuthException catch (e) {
-      // التعامل مع أخطاء المصادقة وعرضها للمستخدم
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('خطأ في التسجيل: ${e.message}'),
-          backgroundColor: Colors.red,
-        ),
-      );
+      _showMessage('خطأ في التسجيل: ${e.message}', Colors.red);
     } catch (e) {
-      // التعامل مع أي أخطاء أخرى غير متوقعة
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('حدث خطأ غير متوقع: $e'),
-          backgroundColor: Colors.red,
-        ),
-      );
+      _showMessage('حدث خطأ غير متوقع: $e', Colors.red);
     } finally {
-      setState(() {
-        _isLoading = false; // تعطيل حالة التحميل
-      });
+      setState(() => _isLoading = false);
     }
+  }
+
+  void _showMessage(String text, Color color) {
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(text), backgroundColor: color));
   }
 
   @override
   Widget build(BuildContext context) {
-    // استخدام MediaQuery للحصول على أبعاد الشاشة لزيادة الاستجابة
     final screenWidth = MediaQuery.of(context).size.width;
-    // تحديد عرض البطاقة بشكل أكثر استجابة
     final cardWidth = screenWidth > 600 ? 400.0 : screenWidth * 0.9;
-    final textFieldWidth = cardWidth * 0.8; // عرض حقول الإدخال بالنسبة للبطاقة
+    final textFieldWidth = cardWidth * 0.8;
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('إنشاء حساب جديد'), // عنوان الصفحة
+        title: const Text('إنشاء حساب جديد'),
         backgroundColor: Colors.transparent,
         elevation: 0,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
-          onPressed: () =>
-              Navigator.of(context).pop(), // زر العودة للصفحة السابقة
+          onPressed: () => Navigator.of(context).pop(),
         ),
       ),
       body: Center(
@@ -116,7 +112,6 @@ class _SignupPageState extends State<SignupPage> {
           padding: const EdgeInsets.all(20.0),
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
-            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
               SizedBox(
                 width: cardWidth,
@@ -128,11 +123,11 @@ class _SignupPageState extends State<SignupPage> {
                   child: Padding(
                     padding: const EdgeInsets.all(25.0),
                     child: Column(
-                      mainAxisSize: MainAxisSize.min,
                       children: [
                         Image.asset("images/logo.png", width: 120, height: 120),
                         const SizedBox(height: 30),
 
+                        // اسم المستخدم
                         SizedBox(
                           width: textFieldWidth,
                           child: TextField(
@@ -147,6 +142,7 @@ class _SignupPageState extends State<SignupPage> {
                         ),
                         const SizedBox(height: 20),
 
+                        // البريد الإلكتروني
                         SizedBox(
                           width: textFieldWidth,
                           child: TextField(
@@ -162,6 +158,7 @@ class _SignupPageState extends State<SignupPage> {
                         ),
                         const SizedBox(height: 20),
 
+                        // كلمة المرور
                         SizedBox(
                           width: textFieldWidth,
                           child: TextField(
@@ -177,12 +174,13 @@ class _SignupPageState extends State<SignupPage> {
                         ),
                         const SizedBox(height: 30),
 
+                        // زر التسجيل أو التحميل
                         _isLoading
                             ? const CircularProgressIndicator()
                             : SizedBox(
                                 width: textFieldWidth,
                                 child: ElevatedButton(
-                                  onPressed: _signUp, // استدعاء دالة التسجيل
+                                  onPressed: _signUp,
                                   style: ElevatedButton.styleFrom(
                                     backgroundColor: Colors.blue.shade700,
                                     foregroundColor: Colors.white,
@@ -192,7 +190,6 @@ class _SignupPageState extends State<SignupPage> {
                                     shape: RoundedRectangleBorder(
                                       borderRadius: BorderRadius.circular(12),
                                     ),
-                                    elevation: 5,
                                   ),
                                   child: const Text(
                                     "إنشاء حساب",
@@ -205,12 +202,9 @@ class _SignupPageState extends State<SignupPage> {
                               ),
                         const SizedBox(height: 15),
 
+                        // زر الانتقال إلى صفحة تسجيل الدخول
                         TextButton(
-                          onPressed: () {
-                            Navigator.of(
-                              context,
-                            ).pop(); // العودة إلى صفحة تسجيل الدخول
-                          },
+                          onPressed: () => Navigator.of(context).pop(),
                           child: const Text(
                             "لديك حساب بالفعل؟ تسجيل الدخول",
                             style: TextStyle(

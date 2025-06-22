@@ -8,6 +8,7 @@ import 'package:mizaniflutter/screens/debts_page.dart';
 import 'package:mizaniflutter/screens/deposid_page.dart';
 import 'package:mizaniflutter/screens/expand_page.dart';
 import 'package:mizaniflutter/screens/home_page.dart';
+import 'package:mizaniflutter/screens/profil_page.dart';
 import 'package:mizaniflutter/screens/saving_page.dart';
 import 'package:mizaniflutter/screens/st.dart';
 
@@ -30,6 +31,7 @@ class _SideBarState extends State<SideBar> {
     const CreditsPage(),
     const AnalysisPage(),
     const StatisticsPage(),
+    const PersonalInformationPage(),
   ];
 
   TextEditingController MY =
@@ -129,6 +131,11 @@ class _SideBarState extends State<SideBar> {
               icon: Icon(Icons.bar_chart),
               label: Text('Statistics'),
             ),
+            const NavigationRailDestination(
+              icon: Icon(Icons.person),
+              label: Text('Personal Information'),
+            ),
+
             // إضافة وجهة لزر تبديل الثيم في نهاية القائمة
             NavigationRailDestination(
               // استخدم ValueListenableBuilder لضمان تحديث الأيقونة عند تغيير الثيم

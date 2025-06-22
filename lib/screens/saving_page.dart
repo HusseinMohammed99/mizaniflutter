@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:mizaniflutter/compount/view_page.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 class SavingPage extends StatefulWidget {
   const SavingPage({super.key});
@@ -10,11 +11,13 @@ class SavingPage extends StatefulWidget {
 
 TextEditingController mycontroller = TextEditingController();
 TextEditingController mytypecontroller = TextEditingController();
+final userId = Supabase.instance.client.auth.currentUser?.id;
 
 class _SavingPageState extends State<SavingPage> {
   Future<void> addExpense(String name) async {
     try {
       final response = await supabase.from('saving').insert({
+        'user_id': userId,
         'amount': name,
         'note': mytypecontroller.text,
         'type': 'ادخار',
