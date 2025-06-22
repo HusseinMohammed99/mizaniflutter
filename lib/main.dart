@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:mizaniflutter/Theme/dark_theme_page.dart';
 import 'package:mizaniflutter/Theme/light_them_page.dart';
-import 'package:mizaniflutter/app-color.dart'; // تأكد من استخدامه إذا كان ضرورياً
+// تأكد من استخدامه إذا كان ضرورياً
 import 'package:mizaniflutter/screens/login_page.dart';
-import 'package:mizaniflutter/screens/widgetpages/Home/home_widget.dart'; // تأكد من المسار الصحيح
+// تأكد من المسار الصحيح
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart'; // 🔴 استيراد shared_preferences
 

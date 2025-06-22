@@ -15,8 +15,6 @@ class DarkThemePage extends StatefulWidget {
         onSecondary: AppColors.darkOnSecondary,
         error: AppColors.darkError,
         onError: AppColors.darkOnError,
-        background: AppColors.darkBackground,
-        onBackground: AppColors.darkOnBackground,
         surface: AppColors.darkSurface,
         onSurface: AppColors.darkOnSurface,
       ),

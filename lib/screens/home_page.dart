@@ -109,9 +109,9 @@ class _HomePageState extends State<HomePage> {
       setState(() {
         this.totalSalary = totalSalary;
         this.totalExpense = totalExpense;
-        this.saving = totalSaving;
-        this.debts = totalDebts;
-        this.credits = totalCredits;
+        saving = totalSaving;
+        debts = totalDebts;
+        credits = totalCredits;
         this.netSalary = netSalary;
       });
     } catch (e) {
@@ -122,7 +122,7 @@ class _HomePageState extends State<HomePage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      bottomNavigationBar: BottomAppBar(child: Text(t.text), height: 50),
+      bottomNavigationBar: BottomAppBar(height: 50, child: Text(t.text)),
       body: SafeArea(
         child: Column(
           children: [

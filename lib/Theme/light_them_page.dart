@@ -15,8 +15,6 @@ class lightThemePage extends StatefulWidget {
         onSecondary: AppColors.lightOnSecondary,
         error: AppColors.lightError,
         onError: AppColors.lightOnError,
-        background: AppColors.lightBackground,
-        onBackground: AppColors.lightOnBackground,
         surface: AppColors.lightSurface,
         onSurface: AppColors.lightOnSurface,
       ),

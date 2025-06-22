@@ -53,7 +53,8 @@ class _CreditsPageState extends State<CreditsPage> {
                       addExpense(mycontroller.text);
                     },
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.blue,
+                      // Colors.green.shade700, // 🔴 لون زر الدخول
+                      backgroundColor: Colors.green.shade700,
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(5),
                       ),
