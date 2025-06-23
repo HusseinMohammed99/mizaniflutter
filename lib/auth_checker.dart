@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:mizaniflutter/screens/widgetpages/Home/home_widget.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:mizaniflutter/screens/login_page.dart'; // 🔴 تأكد من المسار الصحيح لصفحة تسجيل الدخول
-import 'package:mizaniflutter/screens/home_page.dart'; // 🔴 تأكد من المسار الصحيح لصفحتك الرئيسية
+// 🔴 تأكد من المسار الصحيح لصفحتك الرئيسية
 
 // الوصول إلى عميل Supabase المهيأ عالمياً
 final supabase = Supabase.instance.client;

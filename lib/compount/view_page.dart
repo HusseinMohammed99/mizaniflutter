@@ -1,7 +1,20 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:intl/intl.dart'; // لتنسيق الأرقام
 
+// الوصول إلى عميل Supabase
 final supabase = Supabase.instance.client;
+
+// خريطة لربط رموز العملات بالرموز المعروضة (نفس الخريطة المستخدمة في SalarySettingPage)
+const Map<String, String> currencySymbols = {
+  'IQD': 'د.ع', // دينار عراقي
+  'USD': '\$', // دولار أمريكي
+  'EUR': '€', // يورو
+  'SAR': 'ر.س', // ريال سعودي
+  'AED': 'د.إ', // درهم إماراتي
+  'KWD': 'د.ك', // دينار كويتي
+  // أضف المزيد حسب حاجتك
+};
 
 class ViewPageWidget extends StatefulWidget {
   final List<String> filterTypes;
@@ -45,6 +58,13 @@ class _ViewPageWidgetState extends State<ViewPageWidget> {
     }
   }
 
+  // دالة مساعدة لتنسيق المبلغ والعملة
+  String _formatAmount(double amount, String currencyCode) {
+    String symbol = currencySymbols[currencyCode] ?? currencyCode;
+    final formatter = NumberFormat("#,##0.00 $symbol", "ar");
+    return formatter.format(amount);
+  }
+
   Future<void> loadData() async {
     if (_currentUserId == null) return; // لا تحمل بيانات إذا لا يوجد مستخدم
 
@@ -63,8 +83,11 @@ class _ViewPageWidgetState extends State<ViewPageWidget> {
         table = 'salaries';
         final response = await supabase
             .from(table)
-            .select()
-            .eq('user_id', userId); // 🔴 فلترة حسب user_id
+            .select(
+              'id, amount, currency_type, created_at, updated_at, user_id',
+            )
+            .eq('user_id', userId)
+            .order('created_at', ascending: false);
         allData = List<Map<String, dynamic>>.from(
           response,
         ).map((e) => {...e, 'table': table}).toList();
@@ -72,8 +95,9 @@ class _ViewPageWidgetState extends State<ViewPageWidget> {
         table = 'expenses';
         final response = await supabase
             .from(table)
-            .select()
-            .eq('user_id', userId); // 🔴 فلترة حسب user_id
+            .select('id, amount, note, type, created_at, updated_at, user_id')
+            .eq('user_id', userId)
+            .order('created_at', ascending: false);
         allData = List<Map<String, dynamic>>.from(
           response,
         ).map((e) => {...e, 'table': table}).toList();
@@ -81,8 +105,9 @@ class _ViewPageWidgetState extends State<ViewPageWidget> {
         table = 'saving';
         final response = await supabase
             .from(table)
-            .select()
-            .eq('user_id', userId); // 🔴 فلترة حسب user_id
+            .select('id, amount, note, created_at, updated_at, user_id')
+            .eq('user_id', userId)
+            .order('created_at', ascending: false);
         allData = List<Map<String, dynamic>>.from(
           response,
         ).map((e) => {...e, 'table': table}).toList();
@@ -90,8 +115,11 @@ class _ViewPageWidgetState extends State<ViewPageWidget> {
         table = 'debts';
         final response = await supabase
             .from(table)
-            .select()
-            .eq('user_id', userId); // 🔴 فلترة حسب user_id
+            .select(
+              'id, amount, note, debtor_name, created_at, updated_at, user_id',
+            )
+            .eq('user_id', userId)
+            .order('created_at', ascending: false);
         allData = List<Map<String, dynamic>>.from(
           response,
         ).map((e) => {...e, 'table': table}).toList();
@@ -99,8 +127,11 @@ class _ViewPageWidgetState extends State<ViewPageWidget> {
         table = 'credits';
         final response = await supabase
             .from(table)
-            .select()
-            .eq('user_id', userId); // 🔴 فلترة حسب user_id
+            .select(
+              'id, amount, note, creditor_name, created_at, updated_at, user_id',
+            )
+            .eq('user_id', userId)
+            .order('created_at', ascending: false);
         allData = List<Map<String, dynamic>>.from(
           response,
         ).map((e) => {...e, 'table': table}).toList();
@@ -108,24 +139,35 @@ class _ViewPageWidgetState extends State<ViewPageWidget> {
         // جلب جميع البيانات وفلترتها حسب user_id
         final salaries = await supabase
             .from('salaries')
-            .select()
-            .eq('user_id', userId);
+            .select(
+              'id, amount, currency_type, created_at, updated_at, user_id',
+            )
+            .eq('user_id', userId)
+            .order('created_at', ascending: false);
         final expenses = await supabase
             .from('expenses')
-            .select()
-            .eq('user_id', userId);
+            .select('id, amount, note, type, created_at, updated_at, user_id')
+            .eq('user_id', userId)
+            .order('created_at', ascending: false);
         final saving = await supabase
             .from('saving')
-            .select()
-            .eq('user_id', userId);
+            .select('id, amount, note, created_at, updated_at, user_id')
+            .eq('user_id', userId)
+            .order('created_at', ascending: false);
         final debts = await supabase
             .from('debts')
-            .select()
-            .eq('user_id', userId);
+            .select(
+              'id, amount, note, debtor_name, created_at, updated_at, user_id',
+            )
+            .eq('user_id', userId)
+            .order('created_at', ascending: false);
         final credits = await supabase
             .from('credits')
-            .select()
-            .eq('user_id', userId);
+            .select(
+              'id, amount, note, creditor_name, created_at, updated_at, user_id',
+            )
+            .eq('user_id', userId)
+            .order('created_at', ascending: false);
 
         allData = [
           ...List<Map<String, dynamic>>.from(
@@ -186,16 +228,15 @@ class _ViewPageWidgetState extends State<ViewPageWidget> {
     }
   }
 
-  Future<void> deleteItem(int id, String table) async {
-    if (_currentUserId == null) return; // لا تسمح بالحذف إذا لا يوجد مستخدم
+  Future<void> deleteItem(String id, String table) async {
+    if (_currentUserId == null) return;
 
     if (mounted) {
       setState(() {
-        _isLoading = true; // تفعيل التحميل للحذف
+        _isLoading = true;
       });
     }
     try {
-      // 🔴 حذف السجل إذا كان الـ id متطابقاً وينتمي للمستخدم الحالي
       await supabase
           .from(table)
           .delete()
@@ -209,7 +250,7 @@ class _ViewPageWidgetState extends State<ViewPageWidget> {
           ),
         );
       }
-      await loadData(); // تحدث البيانات بعد الحذف
+      await loadData();
     } on PostgrestException catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -241,19 +282,18 @@ class _ViewPageWidgetState extends State<ViewPageWidget> {
   }
 
   Future<void> editItem(
-    int id,
+    String id,
     String table,
     Map<String, dynamic> newData,
   ) async {
-    if (_currentUserId == null) return; // لا تسمح بالتعديل إذا لا يوجد مستخدم
+    if (_currentUserId == null) return;
 
     if (mounted) {
       setState(() {
-        _isLoading = true; // تفعيل التحميل للتعديل
+        _isLoading = true;
       });
     }
     try {
-      // 🔴 تحديث السجل إذا كان الـ id متطابقاً وينتمي للمستخدم الحالي
       await supabase
           .from(table)
           .update(newData)
@@ -267,7 +307,7 @@ class _ViewPageWidgetState extends State<ViewPageWidget> {
           ),
         );
       }
-      await loadData(); // تحدث البيانات بعد التعديل
+      await loadData();
     } on PostgrestException catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -299,24 +339,39 @@ class _ViewPageWidgetState extends State<ViewPageWidget> {
   }
 
   void showEditDialog(Map<String, dynamic> item, String table) {
+    // 🔴 التحقق من نوع البيانات وضمان أنها String للعرض في TextField
     final TextEditingController noteController = TextEditingController(
-      text: item['note'] ?? '', // 'note' هو الاسم المتوقع للعمود
+      text: (table == 'salaries'
+          ? item['note']?.toString()
+          : item['note']?.toString() ??
+                item['type']?.toString() ??
+                item['debtor_name']?.toString() ??
+                item['creditor_name']?.toString() ??
+                ''),
     );
     final TextEditingController amountController = TextEditingController(
-      text: item['amount'].toString(),
+      text: (item['amount'] ?? 0.0).toString(),
     );
 
     showDialog(
       context: context,
       builder: (BuildContext dialogContext) => AlertDialog(
-        // استخدام dialogContext منفصل
         title: const Text('تعديل البيانات'),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             TextField(
               controller: noteController,
-              decoration: const InputDecoration(labelText: 'ملاحظة / نوع'),
+              // 🔴 تحديد labelText ديناميكياً بناءً على الجدول
+              decoration: InputDecoration(
+                labelText: table == 'salaries'
+                    ? 'ملاحظة'
+                    : table == 'debts'
+                    ? 'اسم المدين'
+                    : table == 'credits'
+                    ? 'اسم الدائن'
+                    : 'ملاحظة / نوع',
+              ),
             ),
             TextField(
               controller: amountController,
@@ -327,32 +382,44 @@ class _ViewPageWidgetState extends State<ViewPageWidget> {
         ),
         actions: [
           TextButton(
-            onPressed: () =>
-                Navigator.pop(dialogContext), // استخدام dialogContext
+            onPressed: () => Navigator.pop(dialogContext),
             child: const Text('إلغاء'),
           ),
           ElevatedButton(
             onPressed: () {
-              final double? parsedAmount = double.tryParse(
-                amountController.text,
-              );
-              final dynamic amountToSend;
-              if (parsedAmount != null) {
-                // 🔴 إذا كان عمود 'amount' في قاعدة البيانات هو 'bigint'، حوله إلى int.
-                // إذا كان 'DOUBLE PRECISION' أو 'NUMERIC'، يمكن إرساله كـ double.
-                // الافتراض هنا أنك تريد إرساله كـ int ليتوافق مع 'bigint'.
-                amountToSend = parsedAmount.toInt();
-              } else {
-                amountToSend = 0;
+              // 🔴 تحويل المبلغ إلى double بأمان
+              final double parsedAmount =
+                  double.tryParse(amountController.text) ?? 0.0;
+              final Map<String, dynamic> newData = {
+                'amount': parsedAmount,
+                'updated_at': DateTime.now()
+                    .toIso8601String(), // تحديث وقت التعديل
+              };
+
+              // 🔴 التعامل مع الأعمدة الخاصة بكل جدول
+              if (table == 'salaries') {
+                // جدول salaries لا يحتوي على 'note' بشكل عام، ولديه 'currency_type'
+                newData['currency_type'] =
+                    item['currency_type'] ??
+                    'IQD'; // الاحتفاظ بالعملة الأصلية أو الافتراضية
+                // إذا أردت السماح بتعديل الملاحظة، أضف عمود 'note' في جدول 'salaries'
+                // newData['note'] = noteController.text;
+              } else if (table == 'expenses' || table == 'saving') {
+                newData['note'] = noteController.text;
+                if (table == 'expenses' && item.containsKey('type')) {
+                  // إذا كان المصروف له 'type'، قد تحتاج لإضافة حقل منفصل له
+                  newData['type'] = item['type']; // الاحتفاظ بالنوع الأصلي
+                }
+              } else if (table == 'debts') {
+                newData['debtor_name'] =
+                    noteController.text; // حقل الملاحظة يستخدم لاسم المدين
+              } else if (table == 'credits') {
+                newData['creditor_name'] =
+                    noteController.text; // حقل الملاحظة يستخدم لاسم الدائن
               }
 
-              final newData = {
-                'note': noteController
-                    .text, // استخدم 'note' أو 'type' حسب اسم العمود الفعلي
-                'amount': amountToSend,
-              };
-              editItem(item['id'], table, newData);
-              Navigator.pop(dialogContext); // استخدام dialogContext
+              editItem(item['id'].toString(), table, newData);
+              Navigator.pop(dialogContext);
             },
             child: const Text('حفظ'),
           ),
@@ -365,12 +432,9 @@ class _ViewPageWidgetState extends State<ViewPageWidget> {
   Widget build(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.all(16),
-      child:
-          _isLoading // عرض مؤشر التحميل عندما تكون البيانات قيد التحميل
+      child: _isLoading
           ? const Center(child: CircularProgressIndicator())
-          : transactions == null ||
-                transactions!
-                    .isEmpty // التحقق من عدم وجود بيانات
+          : transactions == null || transactions!.isEmpty
           ? Center(
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
@@ -379,27 +443,13 @@ class _ViewPageWidgetState extends State<ViewPageWidget> {
                     'لا توجد بيانات لعرضها.',
                     style: TextStyle(fontSize: 16, color: Colors.grey),
                   ),
-                  if (_currentUserId !=
-                      null) // عرض معرف المستخدم فقط إذا كان موجوداً
+                  if (_currentUserId != null)
                     Padding(
                       padding: const EdgeInsets.only(top: 20),
                       child: Card(
                         elevation: 4,
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(10),
-                        ),
-                        child: Padding(
-                          padding: const EdgeInsets.all(12),
-                          child: SelectableText(
-                            // لجعل الـ ID قابلاً للنسخ
-                            'معرف المستخدم: \n${_currentUserId!}',
-                            textAlign: TextAlign.center,
-                            style: const TextStyle(
-                              fontSize: 14,
-                              color: Colors.blueGrey,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
                         ),
                       ),
                     ),
@@ -417,20 +467,6 @@ class _ViewPageWidgetState extends State<ViewPageWidget> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      if (_currentUserId !=
-                          null) // عرض معرف المستخدم في أعلى البطاقة
-                        Padding(
-                          padding: const EdgeInsets.only(bottom: 12),
-                          // child: SelectableText(
-                          //   'معرف المستخدم: \n${_currentUserId!}',
-                          //   textAlign: TextAlign.start,
-                          //   style: const TextStyle(
-                          //     fontSize: 14,
-                          //     color: Colors.blueGrey,
-                          //     fontWeight: FontWeight.bold,
-                          //   ),
-                          // ),
-                        ),
                       const Text(
                         'البيانات',
                         style: TextStyle(
@@ -447,12 +483,51 @@ class _ViewPageWidgetState extends State<ViewPageWidget> {
                           final item = transactions![index];
                           final table = item['table'] ?? '';
 
+                          String titleText = '';
+                          String subtitleText = '';
+                          // 🔴 تحويل المبلغ إلى double بأمان
+                          final double amount =
+                              double.tryParse(item['amount'].toString()) ?? 0.0;
+
+                          if (table == 'salaries') {
+                            final String currency =
+                                item['currency_type'] as String? ?? 'IQD';
+                            titleText = 'راتب';
+                            subtitleText = _formatAmount(amount, currency);
+                          } else if (table == 'expenses') {
+                            final String note = item['note'] as String? ?? '';
+                            final String type = item['type'] as String? ?? '';
+                            titleText = type.isNotEmpty ? type : note;
+                            subtitleText =
+                                '${_formatAmount(amount, 'IQD')} - $note';
+                          } else if (table == 'saving') {
+                            final String note = item['note'] as String? ?? '';
+                            titleText = 'ادخار';
+                            subtitleText =
+                                '${_formatAmount(amount, 'IQD')} - $note';
+                          } else if (table == 'debts') {
+                            final String debtorName =
+                                item['debtor_name'] as String? ?? '';
+                            titleText = 'دين على: $debtorName';
+                            subtitleText = _formatAmount(amount, 'IQD');
+                          } else if (table == 'credits') {
+                            final String creditorName =
+                                item['creditor_name'] as String? ?? '';
+                            titleText = 'دائن لـ: $creditorName';
+                            subtitleText = _formatAmount(amount, 'IQD');
+                          } else {
+                            titleText =
+                                item['id']?.toString() ?? 'بيانات غير معروفة';
+                            subtitleText = 'الجدول: $table';
+                            if (item.containsKey('amount')) {
+                              subtitleText += ' | المبلغ: ${item['amount']}';
+                            }
+                          }
+
                           return ListTile(
                             leading: const Icon(Icons.attach_money),
-                            title: Text(item['note'] ?? ''),
-                            subtitle: Text(
-                              '${item['type'] ?? ''} - ${item['amount'] ?? ''} د.ع',
-                            ),
+                            title: Text(titleText),
+                            subtitle: Text(subtitleText),
                             trailing: Row(
                               mainAxisSize: MainAxisSize.min,
                               children: [
@@ -461,6 +536,7 @@ class _ViewPageWidgetState extends State<ViewPageWidget> {
                                     Icons.edit,
                                     color: Colors.orange,
                                   ),
+                                  // 🔴 التأكد من أن الـ ID من نوع String
                                   onPressed: () => showEditDialog(item, table),
                                 ),
                                 IconButton(
@@ -468,8 +544,9 @@ class _ViewPageWidgetState extends State<ViewPageWidget> {
                                     Icons.delete,
                                     color: Colors.red,
                                   ),
+                                  // 🔴 التأكد من أن الـ ID من نوع String
                                   onPressed: () =>
-                                      deleteItem(item['id'], table),
+                                      deleteItem(item['id'].toString(), table),
                                 ),
                               ],
                             ),

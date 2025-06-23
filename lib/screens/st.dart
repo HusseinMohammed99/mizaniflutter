@@ -51,8 +51,9 @@ class _StatisticsPageState extends State<StatisticsPage> {
 
   // 🔴 Main data fetching function that relies on getSum()
   Future<void> fetchData() async {
-    if (_currentUserId == null)
+    if (_currentUserId == null) {
       return; // Do not fetch data if no user is logged in
+    }
 
     setState(() {
       isLoading = true; // Activate loading state

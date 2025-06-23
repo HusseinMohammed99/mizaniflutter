@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:mizaniflutter/screens/widgetpages/Home/home_widget.dart'; // 🔴 تأكد من استيراد صفحتك الرئيسية الصحيحة هنا
 
 // الوصول إلى عميل Supabase
 final supabase = Supabase.instance.client;
@@ -26,15 +27,25 @@ class _SignupPageState extends State<SignupPage> {
     super.dispose();
   }
 
-  // ✅ صفحة رئيسية مؤقتة للانتقال إليها بعد النجاح
+  // ✅ دالة للانتقال إلى الصفحة الرئيسية
   void _navigateToHome() {
-    Navigator.of(context).pushReplacement(
-      MaterialPageRoute(
-        builder: (_) => const Scaffold(
-          body: Center(child: Text('مرحباً بك في الصفحة الرئيسية')),
+    if (mounted) {
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute(
+          builder: (_) =>
+              const HomeWidgest(), // 🔴 استخدام صفحة HomeWidgets بدلاً من Scaffold مؤقت
         ),
-      ),
-    );
+      );
+    }
+  }
+
+  // ✅ دالة لعرض رسائل للمستخدم
+  void _showMessage(String text, Color color) {
+    if (mounted) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(text), backgroundColor: color));
+    }
   }
 
   Future<void> _signUp() async {
@@ -62,18 +73,58 @@ class _SignupPageState extends State<SignupPage> {
       final AuthResponse res = await supabase.auth.signUp(
         email: email,
         password: password,
-        data: {'username': username},
+        // لا نمرر اسم المستخدم هنا لتجنب تكرار البيانات ولنتحكم في إنشاء الملف الشخصي بشكل صريح
+        // data: {'username': username}, // 🔴 تم إزالة هذا السطر
       );
 
       if (res.user != null) {
+        // 🔴 تم تسجيل المستخدم بنجاح في Supabase Auth.
+        // الآن نقوم بإنشاء سجل له في جدول 'profiles' مباشرة بعد التسجيل
+        final userId = res.user!.id;
+
+        try {
+          await supabase.from('profiles').insert({
+            'id': userId, // ربط الملف الشخصي بمعرف المستخدم في Auth
+            'username': username, // 🔴 حفظ اسم المستخدم المدخل من الحقل
+            'full_name': '', // يمكن تركها فارغة أو إضافة حقل لجمعها
+            'avatar_url': null,
+            'created_at': DateTime.now().toIso8601String(),
+            'updated_at': DateTime.now().toIso8601String(),
+          });
+          print(
+            'Profile created for new user $userId with username: $username',
+          );
+        } on PostgrestException catch (e) {
+          print('Error creating profile for new user: ${e.message}');
+          // لا توقف عملية التسجيل، ولكن سجل الخطأ وأبلغ المستخدم
+          if (mounted) {
+            _showMessage(
+              'تم التسجيل، ولكن حدث خطأ في إنشاء الملف الشخصي: ${e.message}',
+              Colors.orange,
+            );
+          }
+        } catch (e) {
+          print('Unexpected error creating profile: $e');
+          if (mounted) {
+            _showMessage(
+              'تم التسجيل، ولكن حدث خطأ غير متوقع في إنشاء الملف الشخصي: $e',
+              Colors.orange,
+            );
+          }
+        }
+
+        // بعد التسجيل وإنشاء الملف الشخصي، يمكن التحقق من تأكيد البريد الإلكتروني
         if (res.session == null) {
+          // إذا لم يتم إنشاء جلسة تلقائيًا، فالمستخدم يحتاج إلى تأكيد البريد الإلكتروني
           _showMessage(
             'تم التسجيل بنجاح! تحقق من بريدك الإلكتروني لتأكيد الحساب.',
             Colors.green,
           );
+          // 🔴 اختياري: إذا كان التأكيد مطلوبًا قبل تسجيل الدخول، فقد تحتاج لتسجيل الخروج
+          // await supabase.auth.signOut();
         } else {
           _showMessage('تم التسجيل وتسجيل الدخول بنجاح!', Colors.green);
-          _navigateToHome(); // ✅ انتقال إلى الصفحة الرئيسية
+          _navigateToHome(); // ✅ انتقال إلى الصفحة الرئيسية بعد التسجيل والدخول
         }
       }
     } on AuthException catch (e) {
@@ -81,14 +132,10 @@ class _SignupPageState extends State<SignupPage> {
     } catch (e) {
       _showMessage('حدث خطأ غير متوقع: $e', Colors.red);
     } finally {
-      setState(() => _isLoading = false);
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
     }
-  }
-
-  void _showMessage(String text, Color color) {
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(SnackBar(content: Text(text), backgroundColor: color));
   }
 
   @override
@@ -163,13 +210,13 @@ class _SignupPageState extends State<SignupPage> {
                           width: textFieldWidth,
                           child: TextField(
                             controller: _passwordController,
-                            obscureText: true,
                             decoration: const InputDecoration(
                               labelText: 'كلمة المرور',
                               hintText: 'ادخل كلمة المرور',
                               border: OutlineInputBorder(),
                               prefixIcon: Icon(Icons.lock),
                             ),
+                            obscureText: true,
                           ),
                         ),
                         const SizedBox(height: 30),
@@ -190,6 +237,7 @@ class _SignupPageState extends State<SignupPage> {
                                     shape: RoundedRectangleBorder(
                                       borderRadius: BorderRadius.circular(12),
                                     ),
+                                    elevation: 5,
                                   ),
                                   child: const Text(
                                     "إنشاء حساب",

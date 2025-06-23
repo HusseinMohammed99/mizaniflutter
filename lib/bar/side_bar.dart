@@ -10,6 +10,7 @@ import 'package:mizaniflutter/screens/expand_page.dart';
 import 'package:mizaniflutter/screens/home_page.dart';
 import 'package:mizaniflutter/screens/profil_page.dart';
 import 'package:mizaniflutter/screens/saving_page.dart';
+import 'package:mizaniflutter/screens/sitting_page.dart';
 import 'package:mizaniflutter/screens/st.dart';
 
 class SideBar extends StatefulWidget {
@@ -32,6 +33,7 @@ class _SideBarState extends State<SideBar> {
     const AnalysisPage(),
     const StatisticsPage(),
     const PersonalInformationPage(),
+    const SalarySettingPage(),
   ];
 
   TextEditingController MY =
@@ -134,6 +136,10 @@ class _SideBarState extends State<SideBar> {
             const NavigationRailDestination(
               icon: Icon(Icons.person),
               label: Text('Personal Information'),
+            ),
+            const NavigationRailDestination(
+              icon: Icon(Icons.settings),
+              label: Text('Setting'),
             ),
 
             // إضافة وجهة لزر تبديل الثيم في نهاية القائمة

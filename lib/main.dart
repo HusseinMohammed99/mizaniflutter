@@ -2,6 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:mizaniflutter/Theme/dark_theme_page.dart';
 import 'package:mizaniflutter/Theme/light_them_page.dart';
 import 'package:mizaniflutter/auth_checker.dart';
+import 'package:mizaniflutter/screens/login_page.dart';
+import 'package:mizaniflutter/screens/profil_page.dart';
+import 'package:mizaniflutter/screens/signup_page.dart';
+import 'package:mizaniflutter/screens/widgetpages/Home/home_widget.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -95,6 +99,14 @@ class MyApp extends StatelessWidget {
               currentThemeMode, // يستخدم الثيم الحالي من themeModeNotifier
           // 🔴 استخدام AuthChecker كنقطة بداية للتطبيق
           home: const AuthChecker(),
+          // 🔴 تحديد روت التطبيق
+          routes: {
+            '/login': (context) => const LoginPage(),
+            '/register': (context) => const SignupPage(),
+            '/profil': (context) => const PersonalInformationPage(),
+            '/home': (context) => const HomeWidgest(),
+            '/signup': (context) => const SignupPage(),
+          },
         );
       },
     );

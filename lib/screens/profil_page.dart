@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:image_picker/image_picker.dart';
-import 'dart:io';
 import 'package:flutter_image_compress/flutter_image_compress.dart'; // لضغط الصور
+import 'package:flutter/foundation.dart'
+    show kIsWeb, Uint8List; // للتحقق من المنصة
 
 // الوصول إلى عميل Supabase المهيأ عالمياً
 final supabase = Supabase.instance.client;
@@ -43,7 +44,7 @@ class _PersonalInformationPageState extends State<PersonalInformationPage> {
     super.dispose();
   }
 
-  // 🔴 دالة لتحميل بيانات الملف الشخصي من Supabase
+  // دالة لتحميل بيانات الملف الشخصي من Supabase
   Future<void> _loadUserProfile() async {
     if (_currentUser == null) {
       if (mounted) {
@@ -64,17 +65,15 @@ class _PersonalInformationPageState extends State<PersonalInformationPage> {
       // جلب بيانات ملف التعريف من جدول 'profiles'
       final response = await supabase
           .from('profiles')
-          .select('username, full_name, avatar_url') // تحديد الأعمدة المطلوبة
-          .eq('id', _currentUser!.id) // جلب الملف الشخصي الخاص بالمستخدم الحالي
-          .single(); // نتوقع صفاً واحداً فقط
+          .select('username, full_name, avatar_url')
+          .eq('id', _currentUser!.id)
+          .single();
 
       if (mounted) {
         setState(() {
           _usernameController.text = response['username'] ?? '';
           _fullNameController.text = response['full_name'] ?? '';
-          _emailController.text =
-              _currentUser!.email ??
-              ''; // البريد الإلكتروني يأتي من auth.currentUser
+          _emailController.text = _currentUser!.email ?? '';
           _avatarUrl = response['avatar_url'];
         });
       }
@@ -105,7 +104,7 @@ class _PersonalInformationPageState extends State<PersonalInformationPage> {
     }
   }
 
-  // 🔴 دالة لتحديث بيانات الملف الشخصي في Supabase
+  // دالة لتحديث بيانات الملف الشخصي في Supabase
   Future<void> _updateProfile() async {
     if (_currentUser == null) {
       if (mounted) {
@@ -189,8 +188,20 @@ class _PersonalInformationPageState extends State<PersonalInformationPage> {
     }
   }
 
-  // 🔴 دالة لتحديد صورة شخصية ورفعها إلى Supabase Storage
+  // دالة لتحديد صورة شخصية ورفعها إلى Supabase Storage
   Future<void> _pickAndUploadImage() async {
+    if (_currentUser == null) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('الرجاء تسجيل الدخول لرفع الصورة.'),
+            backgroundColor: Colors.orange,
+          ),
+        );
+      }
+      return;
+    }
+
     final picker = ImagePicker();
     final pickedFile = await picker.pickImage(source: ImageSource.gallery);
 
@@ -200,20 +211,32 @@ class _PersonalInformationPageState extends State<PersonalInformationPage> {
       });
 
       try {
-        final file = File(pickedFile.path);
+        // التعامل مع الملفات كـ Uint8List (بايتات) للعمل عبر المنصات (خاصة الويب)
+        final Uint8List? imageBytes = await pickedFile.readAsBytes();
 
-        // 🔴 ضغط الصورة باستخدام FlutterImageCompress
-        final XFile? compressedFile =
-            await FlutterImageCompress.compressAndGetFile(
-              file.absolute.path,
-              '${file.absolute.path}_compressed.jpg', // مسار مؤقت لملف مضغوط
-              quality: 70, // جودة الضغط (0-100)
-              minWidth: 800, // يمكن تغيير الأبعاد لتقليل الحجم
-              minHeight: 800,
-              format: CompressFormat.jpeg, // تحديد صيغة الضغط
+        if (imageBytes == null) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('فشل في قراءة بيانات الصورة.'),
+                backgroundColor: Colors.red,
+              ),
             );
+          }
+          return;
+        }
 
-        if (compressedFile == null) {
+        Uint8List? compressedBytes;
+        // ضغط الصورة باستخدام FlutterImageCompress مع البيانات الخام (bytes)
+        compressedBytes = await FlutterImageCompress.compressWithList(
+          imageBytes,
+          quality: 70, // جودة الضغط (0-100)
+          minWidth: 800, // يمكن تغيير الأبعاد لتقليل الحجم
+          minHeight: 800,
+          format: CompressFormat.jpeg, // تحديد صيغة الضغط
+        );
+
+        if (compressedBytes == null || compressedBytes.isEmpty) {
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
               const SnackBar(
@@ -229,14 +252,15 @@ class _PersonalInformationPageState extends State<PersonalInformationPage> {
         final String path =
             'avatars/${_currentUser!.id}/${DateTime.now().millisecondsSinceEpoch}.jpg';
 
-        // 🔴 رفع الصورة إلى Supabase Storage. دالة upload ترجع String (مسار الملف المرفوع)
+        // رفع الصورة كـ Uint8List باستخدام uploadBinary
         final String uploadedPath = await supabase.storage
             .from('avatars')
-            .upload(
+            .uploadBinary(
               path,
-              compressedFile as File, // استخدام الـ XFile المضغوط
+              compressedBytes, // استخدام البايتات المضغوطة
               fileOptions: const FileOptions(
                 upsert: true, // تحديث إذا كان الملف موجوداً بنفس المسار
+                contentType: 'image/jpeg', // تحديد نوع المحتوى
               ),
             );
 
@@ -249,7 +273,7 @@ class _PersonalInformationPageState extends State<PersonalInformationPage> {
           setState(() {
             _avatarUrl = publicUrl; // تحديث رابط الصورة في الـ state
           });
-          // 🔴 تحديث رابط الصورة في جدول الـ profiles مباشرة بعد الرفع
+          // تحديث رابط الصورة في جدول الـ profiles مباشرة بعد الرفع
           await supabase
               .from('profiles')
               .update({'avatar_url': _avatarUrl})
@@ -263,7 +287,7 @@ class _PersonalInformationPageState extends State<PersonalInformationPage> {
           );
         }
       } on StorageException catch (e) {
-        // 🔴 التعامل مع أخطاء التخزين
+        // التعامل مع أخطاء التخزين
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
@@ -287,6 +311,53 @@ class _PersonalInformationPageState extends State<PersonalInformationPage> {
             _isLoading = false;
           });
         }
+      }
+    }
+  }
+
+  // 🔴 دالة جديدة لتسجيل الخروج
+  Future<void> _signOut() async {
+    setState(() {
+      _isLoading = true; // تفعيل حالة التحميل
+    });
+
+    try {
+      await supabase.auth
+          .signOut(); // استدعاء دالة تسجيل الخروج من Supabase Auth
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('تم تسجيل الخروج بنجاح!'),
+            backgroundColor: Colors.green,
+          ),
+        );
+        // 🔴 استبدل '/login' بالمسار الفعلي لصفحة تسجيل الدخول الخاصة بك
+        Navigator.pushReplacementNamed(context, '/login');
+      }
+    } on AuthException catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('خطأ في تسجيل الخروج: ${e.message}'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('حدث خطأ غير متوقع أثناء تسجيل الخروج: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false; // تعطيل حالة التحميل دائماً
+        });
       }
     }
   }
@@ -331,7 +402,7 @@ class _PersonalInformationPageState extends State<PersonalInformationPage> {
                   mainAxisAlignment: MainAxisAlignment.center,
                   crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
-                    // 🔴 بطاقة الملف الشخصي المصممة باحترافية
+                    // بطاقة الملف الشخصي المصممة باحترافية
                     Card(
                       elevation: 12, // ظل أكبر لإبراز البطاقة
                       shape: RoundedRectangleBorder(
@@ -347,7 +418,7 @@ class _PersonalInformationPageState extends State<PersonalInformationPage> {
                         child: Column(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            // 🔴 الصورة الشخصية مع تأثير جميل
+                            // الصورة الشخصية مع تأثير جميل
                             Stack(
                               alignment: Alignment.center,
                               children: [
@@ -392,7 +463,7 @@ class _PersonalInformationPageState extends State<PersonalInformationPage> {
                               ],
                             ),
                             const SizedBox(height: 35), // تباعد بعد الصورة
-                            // 🔴 حقل اسم المستخدم بتصميم محسّن
+                            // حقل اسم المستخدم بتصميم محسّن
                             SizedBox(
                               width: textFieldWidth,
                               child: TextField(
@@ -442,7 +513,7 @@ class _PersonalInformationPageState extends State<PersonalInformationPage> {
                               ),
                             ),
                             const SizedBox(height: 25), // تباعد
-                            // 🔴 حقل الاسم الكامل بتصميم محسّن
+                            // حقل الاسم الكامل بتصميم محسّن
                             SizedBox(
                               width: textFieldWidth,
                               child: TextField(
@@ -488,7 +559,7 @@ class _PersonalInformationPageState extends State<PersonalInformationPage> {
                             ),
                             const SizedBox(height: 25),
 
-                            // 🔴 حقل البريد الإلكتروني (للعرض فقط) بتصميم محسّن
+                            // حقل البريد الإلكتروني (للعرض فقط) بتصميم محسّن
                             SizedBox(
                               width: textFieldWidth,
                               child: TextField(
@@ -541,7 +612,7 @@ class _PersonalInformationPageState extends State<PersonalInformationPage> {
                               ),
                             ),
                             const SizedBox(height: 35), // تباعد قبل الزر
-                            // 🔴 زر حفظ التغييرات بتصميم عصري
+                            // زر حفظ التغييرات بتصميم عصري
                             SizedBox(
                               width: textFieldWidth,
                               child: ElevatedButton(
@@ -566,6 +637,43 @@ class _PersonalInformationPageState extends State<PersonalInformationPage> {
                                   ),
                                 ),
                                 child: const Text("حفظ التغييرات"),
+                              ),
+                            ),
+                            const SizedBox(height: 15), // تباعد بين الأزرار
+                            // 🔴 زر تسجيل الخروج
+                            SizedBox(
+                              width: textFieldWidth,
+                              child: ElevatedButton(
+                                onPressed: _isLoading
+                                    ? null
+                                    : _signOut, // تعطيل الزر أثناء التحميل
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: Colors
+                                      .red
+                                      .shade700, // لون أحمر لزر تسجيل الخروج
+                                  foregroundColor: Colors.white,
+                                  padding: const EdgeInsets.symmetric(
+                                    vertical: 16,
+                                  ),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(15),
+                                  ),
+                                  elevation: 8,
+                                  textStyle: const TextStyle(
+                                    fontSize: 18,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                                child: _isLoading
+                                    ? const SizedBox(
+                                        width: 20,
+                                        height: 20,
+                                        child: CircularProgressIndicator(
+                                          strokeWidth: 2,
+                                          color: Colors.white,
+                                        ),
+                                      )
+                                    : const Text("تسجيل الخروج"),
                               ),
                             ),
                           ],
