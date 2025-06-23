@@ -1,11 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:flutter_image_compress/flutter_image_compress.dart'; // لضغط الصور
+import 'package:flutter_image_compress/flutter_image_compress.dart'; // To compress images
 import 'package:flutter/foundation.dart'
-    show kIsWeb, Uint8List; // للتحقق من المنصة
+    show kIsWeb, Uint8List; // To check platform
+import 'package:mizaniflutter/screens/login_page.dart'; // Ensure the correct path to your login page
 
-// الوصول إلى عميل Supabase المهيأ عالمياً
+// Access the globally initialized Supabase client
 final supabase = Supabase.instance.client;
 
 class PersonalInformationPage extends StatefulWidget {
@@ -17,23 +18,39 @@ class PersonalInformationPage extends StatefulWidget {
 }
 
 class _PersonalInformationPageState extends State<PersonalInformationPage> {
-  // متحكمات حقول الإدخال
   final TextEditingController _usernameController = TextEditingController();
   final TextEditingController _fullNameController = TextEditingController();
   final TextEditingController _emailController = TextEditingController();
 
-  // حالة التحميل
   bool _isLoading = false;
-  // رابط الصورة الشخصية
   String? _avatarUrl;
-  // المستخدم الحالي من Supabase Auth
-  User? _currentUser;
+  User? _currentUser; // Current Supabase Auth user
 
   @override
   void initState() {
     super.initState();
-    _currentUser = supabase.auth.currentUser; // جلب المستخدم الحالي
-    _loadUserProfile(); // تحميل بيانات الملف الشخصي
+    _currentUser = supabase.auth.currentUser; // Get current user on startup
+
+    // Listen for authentication state changes to update user data
+    // This ensures UI updates if user logs in/out or updates their data
+    supabase.auth.onAuthStateChange.listen((data) {
+      if (mounted) {
+        setState(() {
+          _currentUser = data.session?.user;
+          if (_currentUser != null) {
+            _loadUserProfile(); // Reload profile on user change
+          } else {
+            // Clear data if user logs out
+            _usernameController.clear();
+            _fullNameController.clear();
+            _emailController.clear();
+            _avatarUrl = null;
+          }
+        });
+      }
+    });
+
+    _loadUserProfile(); // Load profile data on page initialization
   }
 
   @override
@@ -44,7 +61,7 @@ class _PersonalInformationPageState extends State<PersonalInformationPage> {
     super.dispose();
   }
 
-  // دالة لتحميل بيانات الملف الشخصي من Supabase
+  // Function to load user profile data from Supabase
   Future<void> _loadUserProfile() async {
     if (_currentUser == null) {
       if (mounted) {
@@ -62,19 +79,44 @@ class _PersonalInformationPageState extends State<PersonalInformationPage> {
     });
 
     try {
-      // جلب بيانات ملف التعريف من جدول 'profiles'
-      final response = await supabase
+      // 🔴 استخدام .maybeSingle() للتعامل مع عدم وجود صف
+      // إذا لم يتم العثور على صف، ستُرجع null بدلاً من رمي خطأ.
+      final Map<String, dynamic>? response = await supabase
           .from('profiles')
           .select('username, full_name, avatar_url')
           .eq('id', _currentUser!.id)
-          .single();
+          .maybeSingle();
 
       if (mounted) {
         setState(() {
-          _usernameController.text = response['username'] ?? '';
-          _fullNameController.text = response['full_name'] ?? '';
-          _emailController.text = _currentUser!.email ?? '';
-          _avatarUrl = response['avatar_url'];
+          if (response != null) {
+            // إذا تم العثور على ملف شخصي، قم بتعبئة البيانات
+            final String? authDisplayName =
+                _currentUser!.userMetadata?['display_name'] as String?;
+            _usernameController.text = authDisplayName?.isNotEmpty == true
+                ? authDisplayName!
+                : (response['username'] ?? '');
+
+            _fullNameController.text = response['full_name'] ?? '';
+            _emailController.text = _currentUser!.email ?? '';
+            _avatarUrl = response['avatar_url'];
+          } else {
+            // 🔴 إذا لم يتم العثور على ملف شخصي، قم بتهيئته
+            _usernameController.text =
+                _currentUser!.userMetadata?['display_name'] as String? ?? '';
+            _fullNameController.text = '';
+            _emailController.text = _currentUser!.email ?? '';
+            _avatarUrl = null;
+            // يمكنك أيضاً عرض رسالة للمستخدم هنا بأنه لا يوجد ملف شخصي
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('لا يوجد ملف شخصي. يرجى ملء البيانات وحفظها.'),
+                  backgroundColor: Colors.blue,
+                ),
+              );
+            }
+          }
         });
       }
     } on PostgrestException catch (e) {
@@ -104,7 +146,7 @@ class _PersonalInformationPageState extends State<PersonalInformationPage> {
     }
   }
 
-  // دالة لتحديث بيانات الملف الشخصي في Supabase
+  // Function to update user profile data in Supabase
   Future<void> _updateProfile() async {
     if (_currentUser == null) {
       if (mounted) {
@@ -122,23 +164,25 @@ class _PersonalInformationPageState extends State<PersonalInformationPage> {
     });
 
     try {
-      final updates = {
-        'username': _usernameController.text.trim(),
-        'full_name': _fullNameController.text.trim(),
-        'updated_at': DateTime.now().toIso8601String(), // تحديث وقت التعديل
+      final String newUsername = _usernameController.text.trim();
+      final String newFullName = _fullNameController.text.trim();
+
+      final profileUpdates = {
+        'id': _currentUser!.id, // تأكد من تمرير الـ ID للـ upsert
+        'username': newUsername,
+        'full_name': newFullName,
+        'updated_at': DateTime.now().toIso8601String(),
+        // 'avatar_url' سيتم تحديثه بشكل منفصل عند رفع الصورة
       };
 
-      // تحديث البيانات في جدول 'profiles'
-      await supabase
-          .from('profiles')
-          .update(updates)
-          .eq('id', _currentUser!.id);
+      // 🔴 استخدام .upsert() لإضافة أو تحديث ملف التعريف
+      // هذا سيضيف صفاً جديداً إذا لم يكن موجوداً، أو يحدث الصف الموجود.
+      await supabase.from('profiles').upsert(profileUpdates);
 
-      // تحديث اسم المستخدم في Auth metadata إذا تغير
-      if (_usernameController.text.trim() !=
-          (_currentUser!.userMetadata?['username'] ?? '')) {
+      // تحديث 'display_name' في Auth metadata
+      if (newUsername != (_currentUser!.userMetadata?['display_name'] ?? '')) {
         await supabase.auth.updateUser(
-          UserAttributes(data: {'username': _usernameController.text.trim()}),
+          UserAttributes(data: {'display_name': newUsername}),
         );
       }
 
@@ -149,9 +193,9 @@ class _PersonalInformationPageState extends State<PersonalInformationPage> {
             backgroundColor: Colors.green,
           ),
         );
+        await _loadUserProfile(); // Reload profile after update/upsert
       }
     } on PostgrestException catch (e) {
-      // أخطاء من Postgrest (قاعدة البيانات)
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -161,7 +205,6 @@ class _PersonalInformationPageState extends State<PersonalInformationPage> {
         );
       }
     } on AuthException catch (e) {
-      // أخطاء من Auth (مثل تحديث بيانات المستخدم)
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -188,7 +231,7 @@ class _PersonalInformationPageState extends State<PersonalInformationPage> {
     }
   }
 
-  // دالة لتحديد صورة شخصية ورفعها إلى Supabase Storage
+  // Function to pick and upload profile image to Supabase Storage
   Future<void> _pickAndUploadImage() async {
     if (_currentUser == null) {
       if (mounted) {
@@ -202,128 +245,128 @@ class _PersonalInformationPageState extends State<PersonalInformationPage> {
       return;
     }
 
-    final picker = ImagePicker();
-    final pickedFile = await picker.pickImage(source: ImageSource.gallery);
+    setState(() {
+      _isLoading = true;
+    });
 
-    if (pickedFile != null) {
-      setState(() {
-        _isLoading = true;
-      });
+    try {
+      final picker = ImagePicker();
+      final pickedFile = await picker.pickImage(source: ImageSource.gallery);
 
-      try {
-        // التعامل مع الملفات كـ Uint8List (بايتات) للعمل عبر المنصات (خاصة الويب)
-        final Uint8List? imageBytes = await pickedFile.readAsBytes();
+      if (pickedFile == null) {
+        return; // User cancelled picking
+      }
 
-        if (imageBytes == null) {
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text('فشل في قراءة بيانات الصورة.'),
-                backgroundColor: Colors.red,
-              ),
-            );
-          }
-          return;
-        }
+      final Uint8List? imageBytes = await pickedFile.readAsBytes();
 
-        Uint8List? compressedBytes;
-        // ضغط الصورة باستخدام FlutterImageCompress مع البيانات الخام (bytes)
-        compressedBytes = await FlutterImageCompress.compressWithList(
-          imageBytes,
-          quality: 70, // جودة الضغط (0-100)
-          minWidth: 800, // يمكن تغيير الأبعاد لتقليل الحجم
-          minHeight: 800,
-          format: CompressFormat.jpeg, // تحديد صيغة الضغط
-        );
-
-        if (compressedBytes == null || compressedBytes.isEmpty) {
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text('فشل في ضغط الصورة.'),
-                backgroundColor: Colors.red,
-              ),
-            );
-          }
-          return;
-        }
-
-        // تحديد مسار الملف في Supabase Storage (مثلاً: avatars/user_id/timestamp.jpg)
-        final String path =
-            'avatars/${_currentUser!.id}/${DateTime.now().millisecondsSinceEpoch}.jpg';
-
-        // رفع الصورة كـ Uint8List باستخدام uploadBinary
-        final String uploadedPath = await supabase.storage
-            .from('avatars')
-            .uploadBinary(
-              path,
-              compressedBytes, // استخدام البايتات المضغوطة
-              fileOptions: const FileOptions(
-                upsert: true, // تحديث إذا كان الملف موجوداً بنفس المسار
-                contentType: 'image/jpeg', // تحديد نوع المحتوى
-              ),
-            );
-
-        // الحصول على الرابط العام للصورة المرفوعة
-        final String publicUrl = supabase.storage
-            .from('avatars')
-            .getPublicUrl(uploadedPath);
-
+      if (imageBytes == null) {
         if (mounted) {
-          setState(() {
-            _avatarUrl = publicUrl; // تحديث رابط الصورة في الـ state
-          });
-          // تحديث رابط الصورة في جدول الـ profiles مباشرة بعد الرفع
-          await supabase
-              .from('profiles')
-              .update({'avatar_url': _avatarUrl})
-              .eq('id', _currentUser!.id);
-
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
-              content: Text('تم رفع الصورة بنجاح!'),
-              backgroundColor: Colors.green,
-            ),
-          );
-        }
-      } on StorageException catch (e) {
-        // التعامل مع أخطاء التخزين
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('خطأ في رفع الصورة إلى التخزين: ${e.message}'),
+              content: Text('فشل في قراءة بيانات الصورة.'),
               backgroundColor: Colors.red,
             ),
           );
         }
-      } catch (e) {
+        return;
+      }
+
+      Uint8List? compressedBytes;
+      compressedBytes = await FlutterImageCompress.compressWithList(
+        imageBytes,
+        quality: 70, // Compression quality (0-100)
+        minWidth: 800, // Can change dimensions to reduce size
+        minHeight: 800,
+        format: CompressFormat.jpeg, // Specify compression format
+      );
+
+      if (compressedBytes == null || compressedBytes.isEmpty) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('حدث خطأ غير متوقع أثناء رفع الصورة: $e'),
+            const SnackBar(
+              content: Text('فشل في ضغط الصورة.'),
               backgroundColor: Colors.red,
             ),
           );
         }
-      } finally {
-        if (mounted) {
-          setState(() {
-            _isLoading = false;
-          });
-        }
+        return;
+      }
+
+      // Define file path in Supabase Storage (e.g., avatars/user_id/timestamp.jpg)
+      final String path =
+          'avatars/${_currentUser!.id}/${DateTime.now().millisecondsSinceEpoch}.jpg';
+
+      // Upload image as Uint8List using uploadBinary
+      final String uploadedPath = await supabase.storage
+          .from('avatars')
+          .uploadBinary(
+            path,
+            compressedBytes, // Use compressed bytes
+            fileOptions: const FileOptions(
+              upsert: true, // Update if file exists at the same path
+              contentType: 'image/jpeg', // Set content type
+            ),
+          );
+
+      // Get public URL of the uploaded image
+      final String publicUrl = supabase.storage
+          .from('avatars')
+          .getPublicUrl(uploadedPath);
+
+      if (mounted) {
+        setState(() {
+          _avatarUrl = publicUrl; // Update image URL in state
+        });
+        // Update image URL in 'profiles' table directly after upload
+        // 🔴 استخدام .upsert() لـ avatar_url أيضاً
+        await supabase.from('profiles').upsert({
+          'id': _currentUser!.id,
+          'avatar_url': _avatarUrl,
+        });
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('تم رفع الصورة بنجاح!'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    } on StorageException catch (e) {
+      // Handle storage errors
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('خطأ في رفع الصورة إلى التخزين: ${e.message}'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('حدث خطأ غير متوقع أثناء رفع الصورة: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
       }
     }
   }
 
-  // 🔴 دالة جديدة لتسجيل الخروج
+  // Function to sign out
   Future<void> _signOut() async {
     setState(() {
-      _isLoading = true; // تفعيل حالة التحميل
+      _isLoading = true; // Activate loading state
     });
 
     try {
-      await supabase.auth
-          .signOut(); // استدعاء دالة تسجيل الخروج من Supabase Auth
+      await supabase.auth.signOut(); // Call Supabase Auth sign out function
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -332,8 +375,13 @@ class _PersonalInformationPageState extends State<PersonalInformationPage> {
             backgroundColor: Colors.green,
           ),
         );
-        // 🔴 استبدل '/login' بالمسار الفعلي لصفحة تسجيل الدخول الخاصة بك
-        Navigator.pushReplacementNamed(context, '/login');
+        Navigator.pushAndRemoveUntil(
+          context,
+          MaterialPageRoute(
+            builder: (context) => const LoginPage(),
+          ), // Use LoginPage
+          (Route<dynamic> route) => false, // Remove all previous routes
+        );
       }
     } on AuthException catch (e) {
       if (mounted) {
@@ -356,7 +404,7 @@ class _PersonalInformationPageState extends State<PersonalInformationPage> {
     } finally {
       if (mounted) {
         setState(() {
-          _isLoading = false; // تعطيل حالة التحميل دائماً
+          _isLoading = false;
         });
       }
     }
@@ -366,66 +414,71 @@ class _PersonalInformationPageState extends State<PersonalInformationPage> {
   Widget build(BuildContext context) {
     final screenWidth = MediaQuery.of(context).size.width;
     final cardWidth = screenWidth > 600 ? 500.0 : screenWidth * 0.9;
-    // يتم حساب textFieldWidth بناءً على cardWidth لضمان الاستجابة
     final textFieldWidth = cardWidth * 0.9;
+
+    // Ensure current user is not null before attempting to render UI
+    if (_currentUser == null) {
+      return Scaffold(
+        appBar: AppBar(title: const Text('الملف الشخصي'), centerTitle: true),
+        body: const Center(
+          child: Padding(
+            padding: EdgeInsets.all(20.0),
+            child: Text(
+              'يرجى تسجيل الدخول لعرض وتعديل ملفك الشخصي.',
+              textAlign: TextAlign.center,
+              style: TextStyle(fontSize: 18, color: Colors.grey),
+            ),
+          ),
+        ),
+      );
+    }
 
     return Scaffold(
       appBar: AppBar(
         title: const Text(
-          'ملفي الشخصي', // تغيير العنوان ليكون أكثر وضوحاً
+          'ملفي الشخصي',
           style: TextStyle(
             fontWeight: FontWeight.bold,
             fontSize: 24,
-            color: Colors.blueGrey, // لون أنيق للعنوان
+            color: Colors.blueGrey,
           ),
         ),
-        backgroundColor: Colors.transparent, // لجعل الخلفية شفافة
-        elevation: 0, // إزالة الظل من شريط التطبيق
+        backgroundColor: Colors.transparent,
+        elevation: 0,
         centerTitle: true,
-        // يمكنك إضافة زر رجوع مخصص إذا لزم الأمر
-        // leading: IconButton(
-        //   icon: const Icon(Icons.arrow_back_ios, color: Colors.blueGrey),
-        //   onPressed: () => Navigator.of(context).pop(),
-        // ),
       ),
       body: _isLoading
           ? const Center(
               child: CircularProgressIndicator(color: Colors.blueAccent),
-            ) // مؤشر تحميل بلون جذاب
+            )
           : SingleChildScrollView(
               padding: const EdgeInsets.symmetric(
                 horizontal: 20.0,
                 vertical: 10.0,
-              ), // تباعد أفضل
+              ),
               child: Center(
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
-                    // بطاقة الملف الشخصي المصممة باحترافية
                     Card(
-                      elevation: 12, // ظل أكبر لإبراز البطاقة
+                      elevation: 12,
                       shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(
-                          25,
-                        ), // حواف دائرية أكبر
+                        borderRadius: BorderRadius.circular(25),
                       ),
-                      margin: const EdgeInsets.symmetric(
-                        vertical: 20,
-                      ), // تباعد عن الحواف
+                      margin: const EdgeInsets.symmetric(vertical: 20),
                       child: Padding(
-                        padding: const EdgeInsets.all(35.0), // تباعد داخلي أكبر
+                        padding: const EdgeInsets.all(35.0),
                         child: Column(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            // الصورة الشخصية مع تأثير جميل
+                            // Profile image with aesthetic effect
                             Stack(
                               alignment: Alignment.center,
                               children: [
                                 CircleAvatar(
-                                  radius: 70, // حجم أكبر للصورة
-                                  backgroundColor:
-                                      Colors.blueGrey.shade100, // خلفية خفيفة
+                                  radius: 70,
+                                  backgroundColor: Colors.blueGrey.shade100,
                                   backgroundImage:
                                       _avatarUrl != null &&
                                           _avatarUrl!.isNotEmpty
@@ -434,24 +487,23 @@ class _PersonalInformationPageState extends State<PersonalInformationPage> {
                                   child:
                                       _avatarUrl == null || _avatarUrl!.isEmpty
                                       ? Icon(
-                                          Icons
-                                              .person, // أيقونة شخص بدلاً من الكاميرا إذا لا توجد صورة
+                                          Icons.person,
                                           size: 70,
                                           color: Colors.blueGrey.shade400,
                                         )
                                       : null,
                                 ),
-                                // زر الكاميرا للتغيير
+                                // Camera button to change image
                                 Positioned(
                                   bottom: 0,
                                   right: 0,
                                   child: GestureDetector(
                                     onTap: _pickAndUploadImage,
                                     child: CircleAvatar(
-                                      radius: 22, // حجم صغير لزر الكاميرا
-                                      backgroundColor: Theme.of(context)
-                                          .colorScheme
-                                          .primary, // لون أساسي من الثيم
+                                      radius: 22,
+                                      backgroundColor: Theme.of(
+                                        context,
+                                      ).colorScheme.primary,
                                       child: const Icon(
                                         Icons.camera_alt,
                                         color: Colors.white,
@@ -462,58 +514,81 @@ class _PersonalInformationPageState extends State<PersonalInformationPage> {
                                 ),
                               ],
                             ),
-                            const SizedBox(height: 35), // تباعد بعد الصورة
-                            // حقل اسم المستخدم بتصميم محسّن
+                            const SizedBox(height: 15),
+                            // Explicitly display current display_name here
+                            if (_currentUser?.userMetadata?['display_name'] !=
+                                    null &&
+                                _currentUser!
+                                    .userMetadata!['display_name']
+                                    .isNotEmpty)
+                              Text(
+                                'مرحباً، ${_currentUser!.userMetadata!['display_name']}',
+                                style: const TextStyle(
+                                  fontSize: 22,
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.blueGrey,
+                                ),
+                                textAlign: TextAlign.center,
+                              )
+                            else if (_currentUser !=
+                                null) // If user exists but no display name
+                              const Text(
+                                'الرجاء تحديث اسم العرض الخاص بك',
+                                style: TextStyle(
+                                  fontSize: 18,
+                                  color: Colors.grey,
+                                ),
+                                textAlign: TextAlign.center,
+                              )
+                            else
+                              const SizedBox.shrink(), // Don't show anything if no user
+                            const SizedBox(height: 35),
+                            // Username field with improved design
                             SizedBox(
                               width: textFieldWidth,
                               child: TextField(
                                 controller: _usernameController,
                                 decoration: InputDecoration(
-                                  labelText: 'اسم المستخدم',
-                                  hintText: 'ادخل اسم المستخدم',
+                                  labelText: 'اسم المستخدم (اسم العرض)',
+                                  hintText: 'ادخل اسم المستخدم الخاص بك',
                                   prefixIcon: const Icon(
                                     Icons.person_outline,
                                     color: Colors.blueGrey,
                                   ),
                                   border: OutlineInputBorder(
-                                    borderRadius: BorderRadius.circular(
-                                      12,
-                                    ), // حواف دائرية
-                                    borderSide: BorderSide
-                                        .none, // إزالة الحدود الافتراضية
+                                    borderRadius: BorderRadius.circular(12),
+                                    borderSide: BorderSide.none,
                                   ),
-                                  filled: true, // خلفية مملوءة
+                                  filled: true,
                                   fillColor:
                                       Theme.of(
                                         context,
                                       ).inputDecorationTheme.fillColor ??
-                                      Colors.grey.shade100, // لون خلفية الحقل
+                                      Colors.grey.shade100,
                                   contentPadding: const EdgeInsets.symmetric(
                                     vertical: 16,
                                     horizontal: 12,
-                                  ), // تباعد داخلي
+                                  ),
                                   enabledBorder: OutlineInputBorder(
                                     borderRadius: BorderRadius.circular(12),
                                     borderSide: BorderSide(
                                       color: Colors.grey.shade300,
                                       width: 1,
-                                    ), // حدود خفيفة
+                                    ),
                                   ),
                                   focusedBorder: OutlineInputBorder(
                                     borderRadius: BorderRadius.circular(12),
                                     borderSide: const BorderSide(
                                       color: Colors.blueAccent,
                                       width: 2,
-                                    ), // حدود عند التركيز
+                                    ),
                                   ),
                                 ),
-                                style: const TextStyle(
-                                  fontSize: 16,
-                                ), // حجم خط مناسب
+                                style: const TextStyle(fontSize: 16),
                               ),
                             ),
-                            const SizedBox(height: 25), // تباعد
-                            // حقل الاسم الكامل بتصميم محسّن
+                            const SizedBox(height: 25),
+                            // Full name field with improved design
                             SizedBox(
                               width: textFieldWidth,
                               child: TextField(
@@ -559,7 +634,7 @@ class _PersonalInformationPageState extends State<PersonalInformationPage> {
                             ),
                             const SizedBox(height: 25),
 
-                            // حقل البريد الإلكتروني (للعرض فقط) بتصميم محسّن
+                            // Email field (read-only) with improved design
                             SizedBox(
                               width: textFieldWidth,
                               child: TextField(
@@ -599,7 +674,7 @@ class _PersonalInformationPageState extends State<PersonalInformationPage> {
                                     ),
                                   ),
                                 ),
-                                readOnly: true, // لا يمكن تعديله من هنا
+                                readOnly: true, // Cannot be edited from here
                                 keyboardType: TextInputType.emailAddress,
                                 style: TextStyle(
                                   fontSize: 16,
@@ -607,12 +682,12 @@ class _PersonalInformationPageState extends State<PersonalInformationPage> {
                                       .textTheme
                                       .bodyLarge
                                       ?.color
-                                      ?.withOpacity(0.7), // لون فاتح
+                                      ?.withOpacity(0.7),
                                 ),
                               ),
                             ),
-                            const SizedBox(height: 35), // تباعد قبل الزر
-                            // زر حفظ التغييرات بتصميم عصري
+                            const SizedBox(height: 35),
+                            // Save Changes button with modern design
                             SizedBox(
                               width: textFieldWidth,
                               child: ElevatedButton(
@@ -620,17 +695,15 @@ class _PersonalInformationPageState extends State<PersonalInformationPage> {
                                 style: ElevatedButton.styleFrom(
                                   backgroundColor: Theme.of(
                                     context,
-                                  ).colorScheme.primary, // لون أساسي من الثيم
+                                  ).colorScheme.primary,
                                   foregroundColor: Colors.white,
                                   padding: const EdgeInsets.symmetric(
                                     vertical: 16,
-                                  ), // تباعد أكبر للزر
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(
-                                      15,
-                                    ), // حواف دائرية أكثر
                                   ),
-                                  elevation: 8, // ظل أكبر للزر
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(15),
+                                  ),
+                                  elevation: 8,
                                   textStyle: const TextStyle(
                                     fontSize: 18,
                                     fontWeight: FontWeight.bold,
@@ -639,18 +712,16 @@ class _PersonalInformationPageState extends State<PersonalInformationPage> {
                                 child: const Text("حفظ التغييرات"),
                               ),
                             ),
-                            const SizedBox(height: 15), // تباعد بين الأزرار
-                            // 🔴 زر تسجيل الخروج
+                            const SizedBox(height: 15),
+                            // Sign Out button
                             SizedBox(
                               width: textFieldWidth,
                               child: ElevatedButton(
                                 onPressed: _isLoading
                                     ? null
-                                    : _signOut, // تعطيل الزر أثناء التحميل
+                                    : _signOut, // Disable button while loading
                                 style: ElevatedButton.styleFrom(
-                                  backgroundColor: Colors
-                                      .red
-                                      .shade700, // لون أحمر لزر تسجيل الخروج
+                                  backgroundColor: Colors.red.shade700,
                                   foregroundColor: Colors.white,
                                   padding: const EdgeInsets.symmetric(
                                     vertical: 16,

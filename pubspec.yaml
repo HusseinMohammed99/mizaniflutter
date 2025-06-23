@@ -19,7 +19,7 @@ publish_to: "none" # Remove this line if you wish to publish to pub.dev
 version: 1.0.0+1
 
 environment:
-  sdk: '>=3.8.1 <4.0.0' # تم تعديل نطاق الـ SDK ليتوافق مع إصدارك الحالي 3.8.1
+  sdk: ">=3.8.1 <4.0.0" # تم تعديل نطاق الـ SDK ليتوافق مع إصدارك الحالي 3.8.1
 
 # Dependencies specify other packages that your package needs in order to work.
 # To automatically upgrade your package dependencies to the latest versions
@@ -32,13 +32,12 @@ dependencies:
     sdk: flutter
   intl: ^0.18.1
   fl_chart: ^0.66.0
-  supabase_flutter: ^2.0.0
+  supabase_flutter: ^2.5.0 # 🔴 تم التحديث إلى أحدث إصدار مستقر
   flutter_slidable: ^4.0.0
   flutter_local_notifications: ^17.1.2
   shared_preferences: ^2.2.0
-  image_picker: ^1.1.0
-  image_compression_flutter: ^1.0.4 # 🔴 تم تخفيض الإصدار ليتوافق مع الـ SDK الحالي
-
+  image_picker: ^1.1.2 # 🔴 تم التحديث إلى أحدث إصدار مستقر
+  flutter_image_compress: ^2.2.0 # 🔴 تم استبدالها بـ flutter_image_compress وأحدث إصدار
 
   # The following adds the Cupertino Icons font to your application.
   # Use with the CupertinoIcons class for iOS style icons.
@@ -48,7 +47,6 @@ dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^5.0.0
-
 
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec
