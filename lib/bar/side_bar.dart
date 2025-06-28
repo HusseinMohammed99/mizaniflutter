@@ -32,7 +32,7 @@ class _SideBarState extends State<SideBar> {
     const CreditsPage(),
     const AnalysisPage(),
     const StatisticsPage(),
-    const PersonalInformationPage(),
+    // const PersonalInformationPage(),
     const SalarySettingPage(),
   ];
 
